@@ -123,8 +123,8 @@ int main(int argc, char **argv)
     }
 
     char *image_file = argv[1];
-    if (argc > 2) K = atoi(argv[3]);
-    if (argc > 3) MAX_ITER = atoi(argv[4]);
+    if (argc > 2) K = atoi(argv[2]);
+    if (argc > 3) MAX_ITER = atoi(argv[3]);
 
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);
