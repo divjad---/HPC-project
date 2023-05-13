@@ -13,11 +13,12 @@
 // IMPROVEMENTS
 // Cluster initalization with Kmeans++
 // Fusion to reduce the number of sweeps through memory and improve performance
+
 // Early stoppage : TODO, what criteria is best
 
 // Default values
-int K = 16;
-int MAX_ITER = 20;
+int K = 32;
+int MAX_ITER = 16;
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
@@ -66,8 +67,9 @@ void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, in
         centroids[i] = (float) imageIn[random_pixel * cpp + i];
     }
 
+    float *distances;
     for (int k = 1; k < K; k++) {
-        float *distances = malloc(num_pixels * sizeof(float));
+        distances = malloc(num_pixels * sizeof(float));
         float total_distance = 0;
 
         // Compute the distance to the nearest centroid for each data point
@@ -96,6 +98,7 @@ void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, in
             centroids[k * cpp + i] = (float) imageIn[chosen_index * cpp + i];
         }
     }    
+    free(distances);
 }
 
 // FUSED Kmeans steps
@@ -149,6 +152,9 @@ void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_i
             }
         }
     }
+
+    free(cluster_values_per_channel);
+    free(elements_per_cluster);
 }
 
 void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
@@ -184,6 +190,8 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
             }
         }
     }
+
+    free(elements_per_cluster);
 }
 
 void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
@@ -259,6 +267,8 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
         double psnr = calculatePSNR(original_image, imageIn, width, height, cpp);
         printf("PSNR: %lf\n", psnr);
     }
+    free(pixel_cluster_indices);
+    free(centroids);
 }
 
 int main(int argc, char **argv)
@@ -270,6 +280,7 @@ int main(int argc, char **argv)
     char *image_file = argv[1];
     int init_strategy = 1; // 0-random, 1-kmeans++
     int fusion = 0; // 0 for standard k-means, 1 for optimized k-means with fused operations
+    int measurePSNR=0;
     if (argc > 2) init_strategy = atoi(argv[2]);
     if (argc > 3) fusion = atoi(argv[3]);
     if (argc > 4) K = atoi(argv[4]);

@@ -58,6 +58,7 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
             }
         }
     }
+    free(elements_per_cluster);
 }
 
 void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
@@ -110,6 +111,8 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
             imageIn[i * cpp + channel] = (unsigned char) centroids[cluster * cpp + channel];
         }
     }
+    free(pixel_cluster_indices);
+    free(centroids);
 }
 
 int main(int argc, char **argv)
