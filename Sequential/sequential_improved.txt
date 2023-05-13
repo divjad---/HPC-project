@@ -1,22 +1,28 @@
-Execution time: 66.7507 seconds
+PSNR: 33.962367
+Execution time: 66.2096 seconds
 K-means parameters:
 - Init strategy: 0
 - Fusion: 0
 - K: 32
 - Max iterations: 16
-Execution time: 66.1045 seconds
+PSNR: 33.962367
+Execution time: 66.8486 seconds
 K-means parameters:
 - Init strategy: 0
 - Fusion: 1
 - K: 32
 - Max iterations: 16
-PSNR: 34.824572
-Execution time: 124.1330 seconds
+PSNR: 34.012529
+Execution time: 123.3517 seconds
 K-means parameters:
 - Init strategy: 1
 - Fusion: 0
 - K: 32
 - Max iterations: 16
-srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
-slurmstepd: error: *** JOB 3099503 ON nsc-msv007 CANCELLED AT 2023-05-13T13:55:14 DUE TO TIME LIMIT ***
-slurmstepd: error: *** STEP 3099503.3 ON nsc-msv007 CANCELLED AT 2023-05-13T13:55:14 DUE TO TIME LIMIT ***
+PSNR: 34.012529
+Execution time: 123.9638 seconds
+K-means parameters:
+- Init strategy: 1
+- Fusion: 1
+- K: 32
+- Max iterations: 16

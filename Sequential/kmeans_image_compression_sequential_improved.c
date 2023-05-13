@@ -13,12 +13,12 @@
 // IMPROVEMENTS
 // Cluster initalization with Kmeans++
 // Fusion to reduce the number of sweeps through memory and improve performance
-
 // Early stoppage : TODO, what criteria is best
 
 // Default values
 int K = 32;
 int MAX_ITER = 16;
+#define EARLY_STOPPAGE_THRESHOLD 1e-4
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
@@ -223,7 +223,7 @@ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_i
 }
 
 
-void kmeans_image_compression(unsigned char *imageIn, int width, int height, int cpp, int init_strategy, int fusion) {
+void kmeans_image_compression(unsigned char *imageIn, int width, int height, int cpp, int init_strategy, int fusion, int early_stopage, int measurePSNR) {
     int num_pixels = width * height;
     float *centroids = (float *) calloc(cpp * K, sizeof(float));
 
@@ -235,20 +235,41 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
     }
     
     int *pixel_cluster_indices = (int *)calloc(num_pixels, sizeof(int));
+    float *previous_centroids;
+    if (early_stopage) 
+        previous_centroids = (float *) calloc(cpp * K, sizeof(float));
+
 
     // Main loop
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
-        if(fusion == 0){
+        
+        if(fusion){
             assignPixelsToNearestCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
             updateCentroidPositions(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
         }else{
             assignPixelsAndUpdateCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
         }
+
+        // Check for early stoppage
+        if(early_stopage){
+            float max_change = 0.0;
+            for (int i = 0; i < K * cpp; i++) {
+                float change = fabs(centroids[i] - previous_centroids[i]);
+                if (change > max_change) {
+                    max_change = change;
+                }
+            }
+            if (max_change <= EARLY_STOPPAGE_THRESHOLD){
+                printf("EARLY STOPPAGE");
+                break;
+            }
+            memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
+        }
     }
 
     // Assign pixels to final clusters
 
-    if(init_strategy ==0){
+    if(!measurePSNR){
         for (int i = 0; i < num_pixels; i++) {
             int cluster = pixel_cluster_indices[i];
             for (int channel = 0; channel < cpp; channel++) {
@@ -269,6 +290,7 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
     }
     free(pixel_cluster_indices);
     free(centroids);
+    free(previous_centroids);
 }
 
 int main(int argc, char **argv)
@@ -281,16 +303,19 @@ int main(int argc, char **argv)
     int init_strategy = 1; // 0-random, 1-kmeans++
     int fusion = 0; // 0 for standard k-means, 1 for optimized k-means with fused operations
     int measurePSNR=0;
+    int early_stopage=0;
     if (argc > 2) init_strategy = atoi(argv[2]);
     if (argc > 3) fusion = atoi(argv[3]);
-    if (argc > 4) K = atoi(argv[4]);
-    if (argc > 5) MAX_ITER = atoi(argv[5]);
+    if (argc > 4) early_stopage = atoi(argv[4]);
+    if (argc > 5) measurePSNR = atoi(argv[5]);
+    if (argc > 6) K = atoi(argv[6]);
+    if (argc > 7) MAX_ITER = atoi(argv[7]);
 
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);
 
     double start_time = omp_get_wtime();
-    kmeans_image_compression(input_image, width, height, cpp, init_strategy, fusion);
+    kmeans_image_compression(input_image, width, height, cpp, init_strategy, fusion, early_stopage, measurePSNR);
     double elapsed_time = omp_get_wtime() - start_time;
 
     // Save the compreesed image
