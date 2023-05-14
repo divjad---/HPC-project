@@ -4,9 +4,15 @@ Project for course **High Performance Computing**
 
 ## Table of Contents
 
-1.[Sequential algorithm](#sequential)
+1. [Sequential algorithm](#sequential)
 
-2.[OpenMP implementation](#openmp-omp)
+2. [OpenMP implementation](#openmp-omp)
+
+3. [CUDA implementation](#cuda)
+
+4. [MPI implementation](#mpi)
+
+5. [MPI + OpenMP implementation](#mpi--openmp-omp)
 
 ## Sequential
 
@@ -14,12 +20,16 @@ Sequential algorithm is described [here](sequential/README.md).
 
 ## OpenMP (OMP)
 
-OpenMP (OMP) implementation is described [here](OMP/README.md).
+OpenMP (OMP) implementation is described [here](omp/README.md).
 
 ## CUDA
 
+CUDA implementation is described [here](cuda/README.md).
+
 ## MPI
 
-MPI implementation is described [here](MPI/README.md).
+MPI implementation is described [here](mpi/README.md).
 
 ## MPI + OpenMP (OMP)
+
+MPI + OpenMP implementation is described [here](mpi_omp/README.md).
