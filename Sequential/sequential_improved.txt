@@ -1,8 +1,0 @@
-PSNR: 29.456540
-Execution time: 36.8348 seconds
-K-means parameters:
-- Init strategy: 0
-- Fusion: 0
-- K: 16
-- Max iterations: 16
-srun: error: nsc-msv007: task 0: Segmentation fault (core dumped)

@@ -1,14 +1,16 @@
-PSNR: 29.349355
-Execution time: 1.3839 seconds
+PSNR: 29.960276
+Execution time: 2.7496 seconds
 K-means parameters:
 - Init strategy: 0
 - Fusion: 0
+- Early stoppage: 0
 - K: 16
-- Max iterations: 16
-PSNR: 30.730987
-Execution time: 2.0414 seconds
+- Max iterations: 32
+PSNR: 30.785785
+Execution time: 3.3949 seconds
 K-means parameters:
 - Init strategy: 1
 - Fusion: 0
+- Early stoppage: 0
 - K: 16
-- Max iterations: 16
+- Max iterations: 32

@@ -12,5 +12,5 @@ export OMP_NUM_THREADS=32
 
 # path init_strategy fusion early_stoppage measurePSNR K MAX_ITER
 gcc -O2 omp_improved.c --openmp -lm -o omp_improved
-srun --reservation=fri omp_improved ../Images/lili.png 0 0 0 1 16 16
-srun --reservation=fri omp_improved ../Images/lili.png 1 0 0 1 16 16
+srun --reservation=fri omp_improved ../Images/lili.png 0 0 0 1 16 32
+srun --reservation=fri omp_improved ../Images/lili.png 1 0 0 1 16 32
