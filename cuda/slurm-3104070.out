@@ -1,0 +1,18 @@
+../libs/stb_image.h(4204): warning: variable "old_limit" was set but never used
+
+../libs/stb_image.h(5090): warning: variable "idata_limit_old" was set but never used
+
+../libs/stb_image.h(6830): warning: variable "out_size" was set but never used
+
+../libs/stb_image.h(6831): warning: variable "delays_size" was set but never used
+
+cuda_basic.cu(44): warning: a host variable "K" cannot be directly read in a device function
+
+cuda_basic.cu(85): warning: a host variable "K" cannot be directly read in a device function
+
+cuda_basic.cu(127): error: a __global__ function call must be configured
+
+cuda_basic.cu(128): error: a __global__ function call must be configured
+
+2 errors detected in the compilation of "/tmp/tmpxft_0025a58b_00000000-8_cuda_basic.cpp1.ii".
+srun: error: Unable to create step for job 3104070: Invalid generic resource (gres) specification
