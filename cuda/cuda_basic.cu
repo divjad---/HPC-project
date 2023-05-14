@@ -78,6 +78,47 @@ __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_
     }
 }
 
+// TRYING TO REDUCE NUMBER OF ATOMIC OPERATIONS -> this works if K*cpp is less than block size -> else we should use for loops
+__global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
+
+    extern __shared__ float sdata[]; // Shared memory for partial sums
+    int *sdata_elements = (int*)&sdata[K * cpp]; // Shared memory for number of elements per cluster
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = tid / width;
+    int j = tid % width;
+
+    // Initialize shared memory
+    if (threadIdx.x < K * cpp) {
+        sdata[threadIdx.x] = 0.0;
+    }
+
+    if (threadIdx.x < K) {
+        sdata_elements[threadIdx.x] = 0;
+    }
+    __syncthreads();
+
+    // Iterate over each pixel
+    if (i < height && j < width) {
+        int index = i * width + j;
+        int cluster = pixel_cluster_indices[index];
+
+        for (int channel = 0; channel < cpp; channel++) {
+            atomicAdd(&sdata[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
+        }
+        atomicAdd(&sdata_elements[cluster], 1); 
+    }
+
+    __syncthreads();
+
+    // First K threads update a different cluster in global memory
+    if (threadIdx.x < K) {
+        for (int channel = 0; channel < cpp; channel++) {
+            atomicAdd(&centroids[threadIdx.x * cpp + channel], sdata[threadIdx.x * cpp + channel]);
+        }
+        atomicAdd(&elements_per_clusters[threadIdx.x], sdata_elements[threadIdx.x]);
+    }
+}
+
 __global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
     
     int tid = blockIdx.x * blockDim.x+ threadIdx.x;
@@ -115,7 +156,11 @@ __global__ void mapPixelsToCentroidValues(unsigned char *imageIn, int *pixel_clu
     }
 }
 
-void kmeans_image_compression(unsigned char *h_image, int width, int height, int cpp, size_t gridSize, size_t blockSize, char *image_file) {
+void kmeans_image_compression(unsigned char *h_image, int width, int height, int cpp, char *image_file) {
+
+    // Set block and grid sizes
+    const size_t blockSize = BLOCK_SIZE;
+    const size_t gridSize = (width * height + blockSize - 1) / blockSize;
 
     // Intialize clusters
     float *h_centroids = (float *) calloc(cpp * K, sizeof(float));
@@ -143,8 +188,13 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
 
         cudaMemset(d_centroids, 0, K * cpp * sizeof(float));
         cudaMemset(d_elements_per_cluster, 0, K * sizeof(int));
-        sumCentroidPositions<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp);
-        updateCentroidPositions<<<gridSize, blockSize>>>(d_image, d_centroids, d_elements_per_cluster, width, height, cpp, K);
+
+        int shared_memory_size = (K * cpp + K) * sizeof(float);
+        sumCentroidPositionsSharedMemory<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp, K);
+        // sumCentroidPositions<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp);
+
+        // updateCentroidPositions<<<gridSize, blockSize>>>(d_image, d_centroids, d_elements_per_cluster, width, height, cpp, K);
+        updateCentroidPositions<<<((K * cpp + 512 -1)/512), 512>>>(d_image, d_centroids, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while updating positions of centroids\n");
     }
 
@@ -178,17 +228,13 @@ int main(int argc, char **argv)
     
     if(!h_image) return 0;
 
-    // Set block and grid sizes
-    const size_t blockSize = BLOCK_SIZE;
-    const size_t gridSize = (width * height + blockSize - 1) / blockSize;
-
     // Create CUDA events and start recording
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     cudaEventRecord(start);
 
-    kmeans_image_compression(h_image, width, height, cpp, gridSize, blockSize, image_file);
+    kmeans_image_compression(h_image, width, height, cpp, image_file);
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);

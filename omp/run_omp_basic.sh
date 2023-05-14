@@ -11,4 +11,4 @@ export OMP_PROC_BIND=TRUE
 export OMP_NUM_THREADS=32
 
 gcc -O2 omp_basic.c --openmp -lm -o omp_basic
-srun omp_basic ../images/street.png 64 64
+srun omp_basic ../images/street.png 32 64
