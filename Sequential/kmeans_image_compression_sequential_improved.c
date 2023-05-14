@@ -18,7 +18,7 @@
 // Default values
 int K = 32;
 int MAX_ITER = 16;
-#define EARLY_STOPPAGE_THRESHOLD 1e-4
+#define EARLY_STOPPAGE_THRESHOLD 1e-2
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
@@ -48,18 +48,7 @@ double calculatePSNR(unsigned char *original_image, unsigned char *compressed_im
     return (10 * log10((255.0 * 255.0) / mse));
 }
 
-float euclideanDistanceSquared(float *point1, unsigned char *point2, int cpp) {
-    float distance = 0.0;
-    float diff;
-    for (int i = 0; i < cpp; i++) {
-        diff = point1[i] - point2[i];
-        distance += diff * diff;
-    }
-    return distance;
-}
-
 void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
-
     // Choose a random pixel for initial centroid
     int num_pixels = width * height;
     int random_pixel = rand() % num_pixels;
@@ -70,32 +59,41 @@ void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, in
     float *distances;
     for (int k = 1; k < K; k++) {
         distances = malloc(num_pixels * sizeof(float));
-        float total_distance = 0;
+        int farthest_pixel = 0;
+        float max_distance = -1;
 
         // Compute the distance to the nearest centroid for each data point
-        for (int i = 0; i < num_pixels; i++) {
-            float min_distance = euclideanDistanceSquared(centroids, &imageIn[i * cpp], cpp);
-            for (int j = 1; j < k; j++) {
-                float distance = euclideanDistanceSquared(&centroids[j * cpp], &imageIn[i * cpp], cpp);
-                if (distance < min_distance) {
-                    min_distance = distance;
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                int pixel_index = i * width + j;
+                float min_distance = 1e5;
+                for (int c = 1; c < k; c++) {
+
+                    // Calculate Euclidean distance
+                    float distance = 0;
+                    for (int channel = 0; channel < cpp; channel++) {
+                        float temp = centroids[c * cpp + channel];
+                        float diff = temp - (float)imageIn[pixel_index * cpp + channel];
+                        distance += diff * diff;
+                    }
+
+                    if (distance < min_distance) {
+                        min_distance = distance;
+                    }
+                }
+                distances[pixel_index] = min_distance;
+
+                // Check if this pixel is the farthest one yet -> not selecting proportionally
+                if (min_distance > max_distance) {
+                    max_distance = min_distance;
+                    farthest_pixel = pixel_index;
                 }
             }
-            distances[i] = min_distance;
-            total_distance += min_distance;
         }
-
-        // Choose the next centroid with probability proportional to the distance squared
-        float random_value = ((float)(rand()) / RAND_MAX * total_distance);
-        int chosen_index = 0;
-        float cumulative_distance = distances[0];
-        while (random_value > cumulative_distance) {
-            chosen_index++;
-            cumulative_distance += distances[chosen_index];
-        }
-
+        
+        // Choose the next centroid to be the farthest data point
         for (int i = 0; i < cpp; i++) {
-            centroids[k * cpp + i] = (float) imageIn[chosen_index * cpp + i];
+            centroids[k * cpp + i] = (float) imageIn[farthest_pixel * cpp + i];
         }
     }    
     free(distances);
@@ -299,6 +297,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Not enough arguments\n");
         exit(1);
     }
+    srand(42);
     char *image_file = argv[1];
     int init_strategy = 1; // 0-random, 1-kmeans++
     int fusion = 0; // 0 for standard k-means, 1 for optimized k-means with fused operations
@@ -326,8 +325,8 @@ int main(int argc, char **argv)
     strcat(output_file, "_compressed.png"); 
     stbi_write_png(output_file, width, height, cpp, input_image, width * cpp);
 
-    printf("Execution time: %.4f seconds\nK-means parameters:\n- Init strategy: %d\n- Fusion: %d\n- K: %d\n- Max iterations: %d\n", 
-       elapsed_time, init_strategy, fusion, K, MAX_ITER);
+    printf("Execution time: %.4f seconds\nK-means parameters:\n- Init strategy: %d\n- Fusion: %d\n- Early stoppage: %d\n- K: %d\n- Max iterations: %d\n", 
+       elapsed_time, init_strategy, fusion, early_stopage, K, MAX_ITER);
 
     stbi_image_free(input_image);
 }

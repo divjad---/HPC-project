@@ -31,10 +31,10 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
     int *elements_per_cluster = (int *)calloc(K, sizeof(int));
     
     // Iterate over each pixel
-    #pragma omp parallel for schedule(dynamic, 32) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K])
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K]) // TODO select group size
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            int index = i * width + j;
+            int index = i * width + j; // Better to use 2x for than single from 0 to num_pixels: split by rows(locality)
             int cluster = pixel_cluster_indices[index];
 
             for (int channel = 0; channel < cpp; channel++) {
@@ -46,7 +46,7 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
     }
 
     // Update each centroid position by calculating the average channel value
-    # pragma omp parallel for 
+    // # pragma omp parallel for -> no need for parallel
     for (int cluster = 0; cluster < K; cluster++) {
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
@@ -65,21 +65,20 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
 
 void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
     // Iterate through each pixel
-    int index, min_cluster_index, min_distance, curr_distance, diff;
-    #pragma omp parallel for schedule(dynamic, 16) private(index, min_cluster_index, min_distance, curr_distance, diff) // TODO test group sizes
+    #pragma omp parallel for schedule(dynamic, 16) 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            index = (i * width + j) * cpp;
+            int index = (i * width + j) * cpp;
             
             // Find nearest centroid
-            min_cluster_index = 0;
-            min_distance = 1e5;
+            int min_cluster_index = 0;
+            float min_distance = FLT_MAX;
 
             for (int cluster = 0; cluster < K; cluster++) {
-                curr_distance = 0;
+                float curr_distance = 0;
                 
                 for (int channel = 0; channel < cpp; channel++) {
-                    diff = ((float)imageIn[index + channel] - centroids[cluster * cpp + channel]);
+                    float diff = ((float)imageIn[index + channel] - centroids[cluster * cpp + channel]);
                     curr_distance += diff * diff;
                 }
 
@@ -125,7 +124,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Not enough arguments\n");
         exit(1);
     }
-
+    srand(42);
     char *image_file = argv[1];
     if (argc > 2) K = atoi(argv[2]);
     if (argc > 3) MAX_ITER = atoi(argv[3]);
