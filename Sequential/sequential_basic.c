@@ -13,7 +13,6 @@
 // Default values
 int K = 32;
 int MAX_ITER = 20;
-srand(42);
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
@@ -47,15 +46,13 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
 
     // Update each centroid position by calculating the average channel value
     for (int cluster = 0; cluster < K; cluster++) {
+        int random_pixel_i = rand() % (width * height);
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
                 centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
             }else{
                 // Assign random pixel to empty centroid
-                int random_pixel_i = rand() % (width * height);
-                for (int channel = 0; channel < cpp; channel++) {
-                    centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
-                }
+                centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
             }
         }
     }
@@ -122,7 +119,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Not enough arguments\n");
         exit(1);
     }
-
+    srand(42);
     char *image_file = argv[1];
     if (argc > 2) K = atoi(argv[2]);
     if (argc > 3) MAX_ITER = atoi(argv[3]);

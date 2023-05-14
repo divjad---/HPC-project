@@ -18,7 +18,7 @@
 // Default values
 int K = 32;
 int MAX_ITER = 16;
-#define EARLY_STOPPAGE_THRESHOLD 1e-2
+#define EARLY_STOPPAGE_THRESHOLD 0.3 // TESTED
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
@@ -158,17 +158,16 @@ void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_i
 
     // Update each centroid position by calculating the average channel value
     for (int cluster = 0; cluster < K; cluster++) {
+        int random_pixel_i = rand() % (width * height);
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
                 centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
             }else{
-                // Assign random pixel to the empty centroid
-                int random_pixel_i = rand() % num_pixels;
+                // Assign random pixel to empty centroid
                 centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
             }
         }
     }
-
     free(cluster_values_per_channel);
     free(elements_per_cluster);
 }
@@ -254,13 +253,13 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
     
     int *pixel_cluster_indices = (int *)calloc(num_pixels, sizeof(int));
     float *previous_centroids;
-    if (early_stopage) 
+    if (early_stopage == 1) 
         previous_centroids = (float *) calloc(cpp * K, sizeof(float));
 
     // Main loop
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
         
-        if(fusion){
+        if(fusion == 0){
             assignPixelsToNearestCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
             updateCentroidPositions(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
         }else{
@@ -268,7 +267,7 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
         }
 
         // Check for early stoppage
-        if(early_stopage){
+        if(early_stopage == 1){
             float max_change = 0.0;
             for (int i = 0; i < K * cpp; i++) {
                 float change = fabs(centroids[i] - previous_centroids[i]);
@@ -277,8 +276,10 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
                 }
             }
             if (max_change <= EARLY_STOPPAGE_THRESHOLD){
-                printf("EARLY STOPPAGE");
+                printf("EARLY STOPPAGE ");
                 break;
+            }else{
+                // printf("%f  ", max_change);
             }
             memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
         }
@@ -310,7 +311,7 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
     }
     free(pixel_cluster_indices);
     free(centroids);
-    free(previous_centroids);
+    if (early_stopage==1) free(previous_centroids);
 }
 
 int main(int argc, char **argv)
@@ -347,7 +348,7 @@ int main(int argc, char **argv)
     strcat(output_file, "_compressed.png"); 
     stbi_write_png(output_file, width, height, cpp, input_image, width * cpp);
 
-    printf("Execution time: %.4f seconds\nK-means parameters:\n- Init strategy: %d\n- Fusion: %d\n- Early stoppage: %d\n- K: %d\n- Max iterations: %d\n", 
+    printf("Exec time: %.4f ... Init: %d ... Fusion: %d ... Early stop: %d ... K: %d ... Max iter: %d\n", 
        elapsed_time, init_strategy, fusion, early_stopage, K, MAX_ITER);
 
     stbi_image_free(input_image);

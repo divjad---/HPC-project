@@ -46,17 +46,14 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
     }
 
     // Update each centroid position by calculating the average channel value
-    // # pragma omp parallel for -> no need for parallel
     for (int cluster = 0; cluster < K; cluster++) {
+        int random_pixel_i = rand() % (width * height);
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
                 centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
             }else{
                 // Assign random pixel to empty centroid
-                int random_pixel_i = rand() % (width * height);
-                for (int channel = 0; channel < cpp; channel++) {
-                    centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
-                }
+                centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
             }
         }
     }
