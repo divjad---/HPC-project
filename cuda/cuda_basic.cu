@@ -19,6 +19,7 @@
 int K = 32;
 int MAX_ITER = 20;
 int BLOCK_SIZE = 256;
+#define WARP_SIZE 32
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp) {
     int index;
