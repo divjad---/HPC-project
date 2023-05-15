@@ -1,0 +1,207 @@
+
+Modules based on Lua: Version 8.7.7  2022-07-05 10:00 -05:00
+    by Robert McLay mclay@tacc.utexas.edu
+
+module [options] sub-command [args ...]
+
+Help sub-commands:
+------------------
+  help                              prints this message
+  help                module [...]  print help message from module(s)
+
+Loading/Unloading sub-commands:
+-------------------------------
+  load | add          module [...]  load module(s)
+  try-load | try-add  module [...]  Add module(s), do not complain if not
+                                    found
+  del | unload        module [...]  Remove module(s), do not complain if not
+                                    found
+  swap | sw | switch  m1 m2         unload m1 and load m2
+  purge                             unload all modules
+  refresh                           reload aliases from current list of
+                                    modules.
+  update                            reload all currently loaded modules.
+
+Listing / Searching sub-commands:
+---------------------------------
+  list                              List loaded modules
+  list                s1 s2 ...     List loaded modules that match the
+                                    pattern
+  avail | av                        List available modules
+  avail | av          string        List available modules that contain
+                                    "string".
+  overview | ov                     List all available modules by short
+                                    names with number of versions
+  overview | ov       string        List available modules by short names
+                                    with number of versions that contain
+                                    "string"
+  spider                            List all possible modules
+  spider              module        List all possible version of that module
+                                    file
+  spider              string        List all module that contain the
+                                    "string".
+  spider              name/version  Detailed information about that version
+                                    of the module.
+  whatis              module        Print whatis information about module
+  keyword | key       string        Search all name and whatis that contain
+                                    "string".
+
+Searching with Lmod:
+--------------------
+  All searching (spider, list, avail, keyword) support regular expressions:
+  
+
+  -r spider           '^p'          Finds all the modules that start with
+                                    `p' or `P'
+  -r spider           mpi           Finds all modules that have "mpi" in
+                                    their name.
+  -r spider           'mpi$         Finds all modules that end with "mpi" in
+                                    their name.
+
+Handling a collection of modules:
+--------------------------------
+  save | s                          Save the current list of modules to a
+                                    user defined "default" collection.
+  save | s            name          Save the current list of modules to
+                                    "name" collection.
+  reset                             The same as "restore system"
+  restore | r                       Restore modules from the user's
+                                    "default" or system default.
+  restore | r         name          Restore modules from "name" collection.
+  restore             system        Restore module state to system defaults.
+  savelist                          List of saved collections.
+  describe | mcc      name          Describe the contents of a module
+                                    collection.
+  disable             name          Disable (i.e. remove) a collection.
+
+Deprecated commands:
+--------------------
+  getdefault          [name]        load name collection of modules or
+                                    user's "default" if no name given.
+                                    ===> Use "restore" instead <====
+  setdefault          [name]        Save current list of modules to name if
+                                    given, otherwise save as the default
+                                    list for you the user.
+                                    ===> Use "save" instead. <====
+
+Miscellaneous sub-commands:
+---------------------------
+  is-loaded           modulefile    return a true status if module is loaded
+  is-avail            modulefile    return a true status if module can be
+                                    loaded
+  show                modulefile    show the commands in the module file.
+  use [-a]            path          Prepend or Append path to MODULEPATH.
+  unuse               path          remove path from MODULEPATH.
+  tablelist                         output list of active modules as a lua
+                                    table.
+
+Important Environment Variables:
+--------------------------------
+  LMOD_COLORIZE                     If defined to be "YES" then Lmod prints
+                                    properties and warning in color.
+
+    --------------------------------------------------------------------------
+
+Lmod Web Sites
+
+  Documentation:    http://lmod.readthedocs.org
+  GitHub:           https://github.com/TACC/Lmod
+  SourceForge:      https://lmod.sf.net
+  TACC Homepage:    https://www.tacc.utexas.edu/research-development/tacc-projects/lmod
+
+  To report a bug please read http://lmod.readthedocs.io/en/latest/075_bug_reporting.html
+    --------------------------------------------------------------------------
+
+
+../libs/stb_image.h(4204): warning: variable "old_limit" was set but never used
+
+../libs/stb_image.h(5090): warning: variable "idata_limit_old" was set but never used
+
+../libs/stb_image.h(6830): warning: variable "out_size" was set but never used
+
+../libs/stb_image.h(6831): warning: variable "delays_size" was set but never used
+
+Image path: ../images/lili.png
+PSNR: 30.386638
+Exec time: 2834.0347ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 30.386586
+Exec time: 2787.1924ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 29.335985
+Exec time: 3114.6169ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 29.336024
+Exec time: 3333.8206ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 30.386608
+Exec time: 2615.1150ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 30.386580
+Exec time: 2790.8374ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 29.335915
+Exec time: 3112.6328ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/lili.png
+PSNR: 29.335985
+Exec time: 3324.3530ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.882881
+Exec time: 2593.3762ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.881998
+Exec time: 2702.0303ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.434737
+Exec time: 3106.7026ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.436179
+Exec time: 3251.1885ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.882709
+Exec time: 2580.4055ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.881950
+Exec time: 2698.5867ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.457746
+Exec time: 3106.3186ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 16 ... Max iter: 32
+Image path: ../images/cvetko.png
+PSNR: 31.457051
+Exec time: 3271.6172ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 16 ... Max iter: 32
+Image path: ../images/lili3.png
+PSNR: 35.174674
+Exec time: 3524.7039ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/lili3.png
+PSNR: 35.179807
+Exec time: 3600.4578ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
+Image path: ../images/lili3.png
+PSNR: 29.696999
+Exec time: 4410.9189ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/lili3.png
+PSNR: 29.697173
+Exec time: 4550.8042ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 29.723589
+Exec time: 1228.6859ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 29.724574
+Exec time: 1573.4347ms ... Init: 0 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 29.724520
+Exec time: 1405.0834ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 29.725586
+Exec time: 1255.4731ms ... Init: 0 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 26.820586
+Exec time: 1587.9939ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 26.820004
+Exec time: 1816.3510ms ... Init: 1 ... Early stop: 0 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 26.819932
+Exec time: 1584.2700ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 128 ... K: 32 ... Max iter: 32
+Image path: ../images/leopard.png
+PSNR: 26.819787
+Exec time: 1633.1569ms ... Init: 1 ... Early stop: 1 ... BLOCK SIZE: 256 ... K: 32 ... Max iter: 32
