@@ -3,7 +3,6 @@
 #include <string.h>
 #include <float.h>
 #include <math.h>
-#include <omp.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
@@ -79,7 +78,7 @@ __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_
     }
 }
 
-// TRYING TO REDUCE NUMBER OF ATOMIC OPERATIONS -> this works if K*cpp is less than block size -> else we should use for loops
+// SHARED ATOMICS-> this works if K*cpp is less than block size -> else we should use for loops !!!
 __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
     extern __shared__ float sdata[]; // Shared memory for partial sums
@@ -107,53 +106,35 @@ __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pi
             atomicAdd(&sdata[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
         }
         atomicAdd(&sdata_elements[cluster], 1); 
-    }
+    
+        __syncthreads();
 
-    __syncthreads();
-
-    // First K threads update a different cluster in global memory
-    if (threadIdx.x < K) {
-        for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&centroids[threadIdx.x * cpp + channel], sdata[threadIdx.x * cpp + channel]);
+        // Update clusters and counts in global memory
+        if (threadIdx.x < K * cpp) {
+            atomicAdd(&centroids[threadIdx.x], sdata[threadIdx.x]);
         }
-        atomicAdd(&elements_per_clusters[threadIdx.x], sdata_elements[threadIdx.x]);
+        if (threadIdx.x < K) {
+            atomicAdd(&elements_per_clusters[threadIdx.x], sdata_elements[threadIdx.x]);
+        }
     }
 }
 
-__inline__ __device__ float warpReduceSum(float val) {
-    for (int offset = WARP_SIZE/2; offset > 0; offset /= 2) 
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    return val;
-}
+// K * cpp can be > block size
+__global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
-__inline__ __device__ int warpReduceSum(int val) {
-    for (int offset = WARP_SIZE/2; offset > 0; offset /= 2) 
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    return val;
-}
-
-__global__ void sumCentroidPositionsSharedMemoryExtended(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
-
-    int warpsPerBlock = blockDim.x / WARP_SIZE;
-    int warpIdx = threadIdx.x / WARP_SIZE;
-    int laneIdx = threadIdx.x % WARP_SIZE;
-
-    // Allocate centroids and centroid count for each warp
-    extern __shared__ float sdata[]; 
-    float *sdata_warp = &sdata[warpIdx * K * cpp];
-    int *sdata_elements = (int*)&sdata[K * cpp * warpsPerBlock];
-    int *sdata_elements_warp = &sdata_elements[warpIdx * K];
-
+    extern __shared__ float sdata[]; // Shared memory for partial sums
+    int *sdata_elements = (int*)&sdata[K * cpp]; // Shared memory for number of elements per cluster
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int i = tid / width;
     int j = tid % width;
 
     // Initialize shared memory
-    for (int idx = laneIdx; idx < K * cpp; idx += WARP_SIZE) {
-        sdata_warp[idx] = 0.0;
+    for (int idx = threadIdx.x; idx < K * cpp; idx += blockDim.x) {
+        sdata[idx] = 0.0f;
     }
-    for (int idx = laneIdx; idx < K; idx += WARP_SIZE) {
-        sdata_elements_warp[idx] = 0;
+
+    for (int idx = threadIdx.x; idx < K; idx += blockDim.x) {
+        sdata_elements[idx] = 0;
     }
     __syncthreads();
 
@@ -163,29 +144,20 @@ __global__ void sumCentroidPositionsSharedMemoryExtended(unsigned char *imageIn,
         int cluster = pixel_cluster_indices[index];
 
         for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&sdata_warp[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
+            atomicAdd(&sdata[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
         }
-        atomicAdd(&sdata_elements_warp[cluster], 1); 
+        atomicAdd(&sdata_elements[cluster], 1); 
     }
 
     __syncthreads();
 
-    // Perform warp-level reduction using warp shuffle operations
-    for (int idx = laneIdx; idx < K; idx += WARP_SIZE) {
-        for (int channel = 0; channel < cpp; channel++) {
-            sdata_warp[idx * cpp + channel] = warpReduceSum(sdata_warp[idx * cpp + channel]);
-        }
-        sdata_elements_warp[idx] = warpReduceSum(sdata_elements_warp[idx]);
+    // Update clusters and counts in global memory
+    for (int idx = threadIdx.x; idx < K * cpp; idx += blockDim.x) {
+        atomicAdd(&centroids[idx], sdata[idx]);
     }
 
-    __syncthreads();
-
-    // First thread of each warp updates a different cluster in global memory
-    if (laneIdx == 0) {
-        for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&centroids[warpIdx * cpp + channel], sdata_warp[warpIdx * cpp + channel]);
-        }
-        atomicAdd(&elements_per_clusters[warpIdx], sdata_elements_warp[warpIdx]);
+    for (int idx = threadIdx.x; idx < K; idx += blockDim.x) {
+        atomicAdd(&elements_per_clusters[idx], sdata_elements[idx]);
     }
 }
 
@@ -228,6 +200,12 @@ __global__ void mapPixelsToCentroidValues(unsigned char *imageIn, int *pixel_clu
 
 void kmeans_image_compression(unsigned char *h_image, int width, int height, int cpp, char *image_file) {
 
+    // Create CUDA events and start recording
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
     // Set block and grid sizes
     const size_t blockSize = BLOCK_SIZE;
     const size_t gridSize = (width * height + blockSize - 1) / blockSize;
@@ -261,8 +239,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         cudaMemset(d_elements_per_cluster, 0, K * sizeof(int));
 
         int shared_memory_size = (K * cpp + K) * sizeof(float);
-        // sumCentroidPositionsSharedMemory<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp, K);
-        sumCentroidPositionsSharedMemoryExtended<<<gridSize, blockSize, shared_memory_size*(blockSize/WARP_SIZE)>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp, K);
+        sumCentroidPositionsSharedMemory<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp, K);
         cudaDeviceSynchronize();
         // sumCentroidPositions<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp);
 
@@ -276,12 +253,19 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     mapPixelsToCentroidValues<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
 
     // Save the compreesed image
+    checkCudaErrors(cudaMemcpy(h_image, d_image, width * height * cpp * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Execution time: %.4f \n", milliseconds);
+    
     char output_file[256]; 
     strcpy(output_file, image_file);
     char *extension = strrchr(output_file, '.');
     if (extension != NULL) *extension = '\0';  // Cut off the file extension
     strcat(output_file, "_compressedGPU.png"); 
-    checkCudaErrors(cudaMemcpy(h_image, d_image, width * height * cpp * sizeof(unsigned char), cudaMemcpyDeviceToHost));
     stbi_write_png(output_file, width, height, cpp, h_image, width * cpp);
 }
 
@@ -302,19 +286,7 @@ int main(int argc, char **argv)
     
     if(!h_image) return 0;
 
-    // Create CUDA events and start recording
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
     kmeans_image_compression(h_image, width, height, cpp, image_file);
 
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-
-    printf("Execution time: %.4f \n", milliseconds);
     stbi_image_free(h_image);
 }

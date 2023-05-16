@@ -362,7 +362,7 @@ int main(int argc, char **argv)
     }
     srand(42);
     char *image_file = argv[1];
-    int init_strategy = 1; // 0-random, 1-kmeans++
+    int init_strategy = 0; // 0-random, 1-kmeans++
     int fusion = 0;        // 0 for standard k-means, 1 for optimized k-means with fused operations
     int measurePSNR = 0;
     int early_stopage = 0;

@@ -1,1 +1,6 @@
-Execution time: 2.5578 seconds
+slurmstepd: error: *** STEP 3111338.0 ON nsc-msv007 CANCELLED AT 2023-05-16T16:45:32 DUE TO TIME LIMIT ***
+slurmstepd: error: *** JOB 3111338 ON nsc-msv007 CANCELLED AT 2023-05-16T16:45:32 DUE TO TIME LIMIT ***
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 3111347.0 ON nsc-msv007 CANCELLED AT 2023-05-16T17:48:02 DUE TO TIME LIMIT ***
+slurmstepd: error: *** JOB 3111347 ON nsc-msv007 CANCELLED AT 2023-05-16T17:48:02 DUE TO TIME LIMIT ***
