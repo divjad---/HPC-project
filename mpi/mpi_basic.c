@@ -148,16 +148,16 @@ int main(int argc, char **argv)
     {
         /* Split the image among the processes (takes into account image not necessarily divisible by number of processes) */
         int my_image_height;
-        if (rank == 0)
+        if (rank == num_processes - 1)
         {
-            // If height not divisible by number of processes then process 0 gets more height then others
+            // If height not divisible by number of processes then last process gets more height then others
             my_image_height = height / num_processes + height % num_processes;
         }
         else
         {
             my_image_height = height / num_processes;
         }
-        unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(unsigned char));
+        unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(int));
         int *counts_send = (int *)malloc(num_processes * sizeof(int));
         int *displacements = (int *)malloc(num_processes * sizeof(int));
         if (rank == 0)
@@ -165,7 +165,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < num_processes; i++)
             {
                 int process_image_height;
-                if (i == 0)
+                if (i == num_processes - 1)
                 {
                     process_image_height = height / num_processes + height % num_processes;
                 }
@@ -174,7 +174,14 @@ int main(int argc, char **argv)
                     process_image_height = height / num_processes;
                 }
                 counts_send[i] = process_image_height * width * cpp;
-                displacements[i] = i * (process_image_height * width * cpp);
+                if (i == 0)
+                {
+                    displacements[i] = 0;
+                }
+                else
+                {
+                    displacements[i] = displacements[i - 1] + counts_send[i - 1];
+                }
             }
         }
         MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
@@ -191,6 +198,12 @@ int main(int argc, char **argv)
         {
             assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
             updateCentroidPositions(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
+
+            MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+            for (int j = 0; j < cpp * K; j++)
+            {
+                centroids[j] /= num_processes;
+            }
         }
 
         /* Assign pixels to final clusters */
