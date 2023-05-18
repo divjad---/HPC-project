@@ -34,7 +34,7 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
     #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K]) // TODO select group size
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            int index = i * width + j; // Better to use 2x for than single from 0 to num_pixels: split by rows(locality)
+            int index = i * width + j; 
             int cluster = pixel_cluster_indices[index];
 
             for (int channel = 0; channel < cpp; channel++) {

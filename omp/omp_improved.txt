@@ -1,39 +1,5 @@
-PSNR: 29.909448
-Exec time: 3.1691 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 30.279311
-Exec time: 3.9032 ... Init: 1 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 29.909448
-Exec time: 3.1771 ... Init: 0 ... Fusion: 0 ... Early stop: 1 ... K: 16 ... Max iter: 32
-PSNR: 30.785785
-Exec time: 3.6500 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 16 ... Max iter: 32
-PSNR: 31.383231
-Exec time: 3.3321 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.383231
-Exec time: 3.2476 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.404482
-Exec time: 3.9123 ... Init: 1 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.291138
-Exec time: 3.9643 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 16 ... Max iter: 32
-PSNR: 31.383231
-Exec time: 3.3344 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.383231
-Exec time: 3.2363 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.402381
-Exec time: 3.9480 ... Init: 1 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 32
-PSNR: 31.455172
-Exec time: 3.9422 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 16 ... Max iter: 32
-PSNR: 34.854672
-Exec time: 5.9365 ... Init: 0 ... Fusion: 0 ... Early stop: 1 ... K: 32 ... Max iter: 32
-PSNR: 35.043953
-Exec time: 7.7167 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 32 ... Max iter: 32
-PSNR: 34.954297
-Exec time: 7.5584 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 32 ... Max iter: 32
-PSNR: 35.238796
-Exec time: 7.5690 ... Init: 1 ... Fusion: 1 ... Early stop: 1 ... K: 32 ... Max iter: 32
-Exec time: 2.4467 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 32 ... Max iter: 32
-PSNR: 29.648445
-Exec time: 2.4207 ... Init: 0 ... Fusion: 0 ... Early stop: 1 ... K: 32 ... Max iter: 32
-PSNR: 30.493944
-Exec time: 3.5513 ... Init: 1 ... Fusion: 0 ... Early stop: 0 ... K: 32 ... Max iter: 32
-PSNR: 29.648445
-Exec time: 2.3285 ... Init: 0 ... Fusion: 1 ... Early stop: 1 ... K: 32 ... Max iter: 32
+Exec time: 19.1706 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 64 ... Max iter: 64
+Exec time: 5.5923 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 64
+Exec time: 19.2499 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 64 ... Max iter: 64
+Exec time: 5.4927 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 64
+Exec time: 19.1518 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 64 ... Max iter: 64

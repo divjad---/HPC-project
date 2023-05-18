@@ -48,7 +48,7 @@ double calculatePSNR(unsigned char *original_image, unsigned char *compressed_im
 
     if (mse == 0)
     {
-        return INFINITY; // Both images are identical, so the PSNR is infinite
+        return INFINITY; // Both images are identical
     }
 
     return (10 * log10((255.0 * 255.0) / mse));

@@ -5,4 +5,4 @@
 #SBATCH --reservation=fri
 
 gcc -O2 sequential_basic.c --openmp -lm -o sequential_basic
-srun sequential_basic ../images/street.png 256 64
+srun sequential_basic ../images/penguin.png 64 64

@@ -13,7 +13,7 @@
 // IMPROVEMENTS
 // Cluster initalization with Kmeans++
 // Fusion to reduce the number of sweeps through memory and improve performance
-// Early stoppage : TODO, what criteria is best
+// Early stoppage : stop in convergence
 
 // Default values
 int K = 32;
@@ -45,7 +45,7 @@ double calculatePSNR(unsigned char *original_image, unsigned char *compressed_im
     }
     mse /= (double) (height * width * cpp);
     if (mse == 0) 
-        return INFINITY; // Both images are identical, so the PSNR is infinite
+        return INFINITY; // Both images are identical
     return (10 * log10((255.0 * 255.0) / mse));
 }
 
@@ -178,7 +178,7 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
     int *elements_per_cluster = (int *)calloc(K, sizeof(int));
     
     // Iterate over each pixel
-    #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K]) // TODO select group size
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K]) // TODO select optimal group size
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             int index = i * width + j;
@@ -278,8 +278,6 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
             if (max_change <= EARLY_STOPPAGE_THRESHOLD){
                 printf("EARLY STOPPAGE ");
                 break;
-            }else{
-                // printf("%f  ", max_change);
             }
             memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
         }

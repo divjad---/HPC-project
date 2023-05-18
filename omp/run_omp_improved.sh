@@ -15,27 +15,12 @@ gcc -O2 omp_improved.c --openmp -lm -o omp_improved
 # srun --reservation=fri omp_improved ../Images/lili.png 0 0 0 1 16 32
 # srun --reservation=fri omp_improved ../Images/lili.png 1 0 0 1 16 32
 
-srun --reservation=fri omp_improved ../images/lili.png 0 0 0 1 16 32
-srun --reservation=fri omp_improved ../images/lili.png 1 0 0 1 16 32
-srun --reservation=fri omp_improved ../images/lili.png 0 0 1 1 16 32
-srun --reservation=fri omp_improved ../images/lili.png 1 1 1 1 16 32
+# srun --reservation=fri omp_improved ../images/lili.png 0 0 0 1 16 32
+# srun --reservation=fri omp_improved ../images/lili.png 1 0 0 1 16 32
+# srun --reservation=fri omp_improved ../images/lili.png 0 0 1 1 16 32
+# srun --reservation=fri omp_improved ../images/lili.png 1 1 1 1 16 32
 
-srun --reservation=fri omp_improved ../images/cvetko.png 0 0 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 0 1 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 1 1 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 1 1 1 1 16 32
-
-srun --reservation=fri omp_improved ../images/cvetko.png 0 0 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 0 1 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 1 1 0 1 16 32
-srun --reservation=fri omp_improved ../images/cvetko.png 1 1 1 1 16 32
-
-srun --reservation=fri omp_improved ../images/lili3.png 0 0 1 1 32 32
-srun --reservation=fri omp_improved ../images/lili3.png 1 1 1 1 32 32
-srun --reservation=fri omp_improved ../images/lili3.png 1 1 1 1 32 32
-srun --reservation=fri omp_improved ../images/lili3.png 1 1 1 1 32 32
-
-srun --reservation=fri omp_improved ../images/leopard.png 0 0 0 0 32 32
-srun --reservation=fri omp_improved ../images/leopard.png 0 0 1 1 32 32
-srun --reservation=fri omp_improved ../images/leopard.png 1 0 0 1 32 32
-srun --reservation=fri omp_improved ../images/leopard.png 0 1 1 1 32 32
+srun --reservation=fri omp_improved ../images/cvetko.png 0 0 0 0 16 64
+srun --reservation=fri omp_improved ../images/cvetko.png 0 0 0 0 64 64
+srun --reservation=fri omp_improved ../images/cvetko.png 0 1 0 0 16 64
+srun --reservation=fri omp_improved ../images/cvetko.png 0 1 0 0 64 64
