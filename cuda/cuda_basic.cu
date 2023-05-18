@@ -58,7 +58,8 @@ __global__ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixe
     }
 }
 
-__global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp) {
+// SLOW ...
+__global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp) {
     
     int tid = blockIdx.x * blockDim.x+ threadIdx.x;
     int i = tid / width;
@@ -70,7 +71,7 @@ __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_
         int cluster = pixel_cluster_indices[index];
 
         for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&centroids[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
+            atomicAdd(&centroids_sums[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
         }
 
         atomicAdd(&elements_per_clusters[cluster], 1);
@@ -78,9 +79,9 @@ __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_
 }
 
 // SHARED ATOMICS-> this works if K*cpp is less than block size -> else we should use for loops !!!
-__global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
+__global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
-    extern __shared__ float sdata[]; // Shared memory for partial sums
+    extern __shared__ int sdata[]; // Shared memory for partial sums
     int *sdata_elements = (int*)&sdata[K * cpp]; // Shared memory for number of elements per cluster
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int i = tid / width;
@@ -88,7 +89,7 @@ __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pi
 
     // Initialize shared memory
     if (threadIdx.x < K * cpp) {
-        sdata[threadIdx.x] = 0.0;
+        sdata[threadIdx.x] = 0;
     }
 
     if (threadIdx.x < K) {
@@ -102,26 +103,26 @@ __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pi
         int cluster = pixel_cluster_indices[index];
 
         for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&sdata[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
+            atomicAdd(&sdata[cluster * cpp + channel], imageIn[index * cpp + channel]);
         }
         atomicAdd(&sdata_elements[cluster], 1); 
     
-        __syncthreads();
+    }
+    __syncthreads();
 
-        // Update clusters and counts in global memory
-        if (threadIdx.x < K * cpp) {
-            atomicAdd(&centroids[threadIdx.x], sdata[threadIdx.x]);
-        }
-        if (threadIdx.x < K) {
-            atomicAdd(&elements_per_clusters[threadIdx.x], sdata_elements[threadIdx.x]);
-        }
+    // Update clusters and counts in global memory
+    if (threadIdx.x < K * cpp) {
+        atomicAdd(&centroids_sums[threadIdx.x], sdata[threadIdx.x]);
+    }
+    if (threadIdx.x < K) {
+        atomicAdd(&elements_per_clusters[threadIdx.x], sdata_elements[threadIdx.x]);
     }
 }
 
-// WORKS EVERYTIME: K * cpp can be > block size
-__global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
+//GENERAL SOLUTION - WORKS EVERYTIME: K * cpp can be > block size
+__global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
-    extern __shared__ float sdata[]; // Shared memory for partial sums
+    extern __shared__ int sdata[]; // Shared memory for partial sums
     int *sdata_elements = (int*)&sdata[K * cpp]; // Shared memory for number of elements per cluster
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int i = tid / width;
@@ -129,7 +130,7 @@ __global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *ima
 
     // Initialize shared memory
     for (int idx = threadIdx.x; idx < K * cpp; idx += blockDim.x) {
-        sdata[idx] = 0.0f;
+        sdata[idx] = 0;
     }
 
     for (int idx = threadIdx.x; idx < K; idx += blockDim.x) {
@@ -143,7 +144,7 @@ __global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *ima
         int cluster = pixel_cluster_indices[index];
 
         for (int channel = 0; channel < cpp; channel++) {
-            atomicAdd(&sdata[cluster * cpp + channel], (float)imageIn[index * cpp + channel]);
+            atomicAdd(&sdata[cluster * cpp + channel], imageIn[index * cpp + channel]);
         }
         atomicAdd(&sdata_elements[cluster], 1); 
     }
@@ -152,7 +153,7 @@ __global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *ima
 
     // Update clusters and counts in global memory
     for (int idx = threadIdx.x; idx < K * cpp; idx += blockDim.x) {
-        atomicAdd(&centroids[idx], sdata[idx]);
+        atomicAdd(&centroids_sums[idx], sdata[idx]);
     }
 
     for (int idx = threadIdx.x; idx < K; idx += blockDim.x) {
@@ -168,7 +169,7 @@ __device__ int getRandomInteger(int lower, int upper, unsigned int seed) {
     return static_cast<int>(randomValue * (upper - lower + 1)) + lower;
 }
 
-__global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids, int* elements_per_clusters, int width, int height, int cpp, int K) {
+__global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids, int* centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
     
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -178,13 +179,17 @@ __global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids
         int channel = tid % cpp;
 
         if (elements_per_clusters[cluster] > 0) {
-            centroids[tid] = centroids[tid] / elements_per_clusters[cluster];
+            centroids[tid] = ((float)centroids_sums[tid]) / elements_per_clusters[cluster];
         } else {
             // Assign random pixel to empty centroid
             unsigned int seed = cluster;
             int random_pixel_i = getRandomInteger(0, width * height - 1, seed);
             centroids[tid] = imageIn[random_pixel_i * cpp + channel];
         }
+
+        centroids_sums[tid] = 0;
+        if(channel == 0)
+            elements_per_clusters[cluster] = 0; 
     }
 }
 
@@ -224,34 +229,34 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     // Copy data to GPU
     unsigned char *d_image;
     float *d_centroids;
+    int *d_centroids_sums;
     int *d_pixel_cluster_indices;
     int *d_elements_per_cluster;
 
     checkCudaErrors(cudaMalloc(&d_image, width * height * cpp * sizeof(unsigned char)));
     checkCudaErrors(cudaMalloc(&d_centroids, K * cpp * sizeof(float)));
+    checkCudaErrors(cudaMalloc(&d_centroids_sums, K * cpp * sizeof(int)));
     checkCudaErrors(cudaMalloc(&d_pixel_cluster_indices, width * height * sizeof(int)));
     checkCudaErrors(cudaMalloc(&d_elements_per_cluster, K * sizeof(int)));
 
     checkCudaErrors(cudaMemcpy(d_image, h_image, width * height * cpp * sizeof(unsigned char), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_centroids, h_centroids, K * cpp * sizeof(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemset(d_centroids_sums, 0,  K * cpp * sizeof(int)));
+    checkCudaErrors(cudaMemset(d_elements_per_cluster, 0, K  * sizeof(int)));
     getLastCudaError("Error while copying data to GPU\n");
 
+    int shared_memory_size = (K * cpp + K) * sizeof(int);
 
     // Main loop
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
         assignPixelsToNearestCentroids<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
-        cudaDeviceSynchronize();
         getLastCudaError("Error while assigning pixels to nearest centroids\n");
 
-        cudaMemset(d_centroids, 0, K * cpp * sizeof(float));
-        cudaMemset(d_elements_per_cluster, 0, K * sizeof(int));
+        sumCentroidPositions<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp);
+        // sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
+        getLastCudaError("Error while summation of centroid vales\n");
 
-        int shared_memory_size = (K * cpp + K) * sizeof(float);
-        sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, height, cpp, K);
-        cudaDeviceSynchronize();
-
-        updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_elements_per_cluster, width, height, cpp, K);
-        cudaDeviceSynchronize();
+        updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while updating positions of centroids\n");
     }
 
@@ -276,6 +281,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
 
     cudaFree(d_image);
     cudaFree(d_centroids);
+    cudaFree(d_centroids_sums);
     cudaFree(d_pixel_cluster_indices);
     cudaFree(d_elements_per_cluster);
 }
