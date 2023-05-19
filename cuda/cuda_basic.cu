@@ -58,7 +58,7 @@ __global__ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixe
     }
 }
 
-// SLOW ...
+// SLOWER than atomics in shared memory
 __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp) {
     
     int tid = blockIdx.x * blockDim.x+ threadIdx.x;
@@ -78,7 +78,7 @@ __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_
     }
 }
 
-// SHARED ATOMICS-> this works if K*cpp is less than block size -> else we should use for loops !!!
+// SHARED ATOMICS-> this works if K*cpp is less than block size - method below is general, that works in every scenario
 __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
     extern __shared__ int sdata[]; // Shared memory for partial sums
@@ -119,7 +119,7 @@ __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pi
     }
 }
 
-//GENERAL SOLUTION - WORKS EVERYTIME: K * cpp can be > block size
+//GENERAL SOLUTION - WORKS IN EVERY SCENARIO: K * cpp can be > block size
 __global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
 
     extern __shared__ int sdata[]; // Shared memory for partial sums
@@ -252,8 +252,8 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         assignPixelsToNearestCentroids<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
         getLastCudaError("Error while assigning pixels to nearest centroids\n");
 
-        sumCentroidPositions<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp);
-        // sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
+        // sumCentroidPositions<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp);
+        sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while summation of centroid vales\n");
 
         updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);

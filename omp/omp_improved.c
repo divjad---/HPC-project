@@ -117,14 +117,11 @@ void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, in
 }
 
 // FUSED Kmeans steps
-void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
+void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* centroids_sums, int* elements_per_cluster, int width, int height, int cpp) {
     int num_pixels = width * height;
     
-    float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
-    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
-    
     // Iterate through each pixel
-    #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K])
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+: centroids_sums[:K*cpp], elements_per_cluster[:K])
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             int index = (i * width + j) * cpp;
@@ -146,11 +143,13 @@ void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_i
                     min_distance = curr_distance;
                 }
             }
+            // We do this here, because exec times are constantely a bit better than going through the whole image again at the end...
+            // We could pass in an argument that indicates last iteration, but we have early stoppage option. No need to further complicate the code for such a tiny differences
             pixel_cluster_indices[i * width + j] = min_cluster_index;
 
             // Update cluster values and count
             for (int channel = 0; channel < cpp; channel++) {
-                cluster_values_per_channel[min_cluster_index * cpp + channel] += imageIn[index + channel];
+                centroids_sums[min_cluster_index * cpp + channel] += imageIn[index + channel];
             }
             elements_per_cluster[min_cluster_index]++;
         }
@@ -161,31 +160,30 @@ void assignPixelsAndUpdateCentroids(unsigned char *imageIn, int *pixel_cluster_i
         int random_pixel_i = rand() % (width * height);
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
-                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
+                centroids[cluster * cpp + channel] = centroids_sums[cluster * cpp + channel] / elements_per_cluster[cluster];
+                // Reset centroid sums
+                centroids_sums[cluster * cpp + channel] = 0;
             }else{
                 // Assign random pixel to empty centroid
                 centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
             }
         }
+        // Reset centroid counts
+        elements_per_cluster[cluster] = 0;
     }
-    free(cluster_values_per_channel);
-    free(elements_per_cluster);
 }
 
-void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
-    
-    float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
-    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
+void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int* centroids_sums, int* elements_per_cluster, int width, int height, int cpp) {
     
     // Iterate over each pixel
-    #pragma omp parallel for schedule(dynamic, 16) reduction(+: cluster_values_per_channel[:K*cpp], elements_per_cluster[:K]) // TODO select optimal group size
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+: centroids_sums[:K*cpp], elements_per_cluster[:K]) 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             int index = i * width + j;
             int cluster = pixel_cluster_indices[index];
 
             for (int channel = 0; channel < cpp; channel++) {
-                cluster_values_per_channel[cluster * cpp + channel] += imageIn[index * cpp + channel];
+                centroids_sums[cluster * cpp + channel] += imageIn[index * cpp + channel];
             }
 
             elements_per_cluster[cluster]++;
@@ -194,20 +192,20 @@ void updateCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices,
 
     // Update each centroid position by calculating the average channel value
     for (int cluster = 0; cluster < K; cluster++) {
+        int random_pixel_i = rand() % (width * height);
         for (int channel = 0; channel < cpp; channel++) {
             if (elements_per_cluster[cluster] > 0) {
-                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
+                centroids[cluster * cpp + channel] = centroids_sums[cluster * cpp + channel] / elements_per_cluster[cluster];
+                // Reset centroid sums
+                centroids_sums[cluster * cpp + channel] = 0;
             }else{
                 // Assign random pixel to empty centroid
-                int random_pixel_i = rand() % (width * height);
-                for (int channel = 0; channel < cpp; channel++) {
-                    centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
-                }
+                centroids[cluster * cpp + channel] = imageIn[random_pixel_i * cpp + channel];
             }
         }
+        // Reset centroid counts
+        elements_per_cluster[cluster] = 0;
     }
-
-    free(elements_per_cluster);
 }
 
 void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp) {
@@ -243,6 +241,8 @@ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixel_cluster_i
 void kmeans_image_compression(unsigned char *imageIn, int width, int height, int cpp, int init_strategy, int fusion, int early_stopage, int measurePSNR) {
     int num_pixels = width * height;
     float *centroids = (float *) calloc(cpp * K, sizeof(float));
+    int *centroids_sums = (int *)calloc(cpp * K, sizeof(int));
+    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
 
     // Intialize clusters
     if(init_strategy == 0){ 
@@ -261,9 +261,10 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
         
         if(fusion == 0){
             assignPixelsToNearestCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
-            updateCentroidPositions(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
+            updateCentroidPositions(imageIn, pixel_cluster_indices, centroids, centroids_sums, elements_per_cluster, width, height, cpp);
         }else{
-            assignPixelsAndUpdateCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
+            assignPixelsAndUpdateCentroids(imageIn, pixel_cluster_indices, centroids, centroids_sums, elements_per_cluster, width, height, cpp);
+            // assignPixelsAndUpdateCentroids(imageIn, centroids, centroids_sums, elements_per_cluster, width, height, cpp);
         }
 
         // Check for early stoppage
@@ -282,6 +283,10 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
             memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
         }
     }
+
+    // if (fusion == 1){
+    //     assignPixelsToNearestCentroids(imageIn, pixel_cluster_indices, centroids, width, height, cpp);
+    // }
 
     // Assign pixels to final clusters
     if(!measurePSNR){
@@ -307,8 +312,10 @@ void kmeans_image_compression(unsigned char *imageIn, int width, int height, int
         double psnr = calculatePSNR(original_image, imageIn, width, height, cpp);
         printf("PSNR: %lf\n", psnr);
     }
-    free(pixel_cluster_indices);
     free(centroids);
+    free(pixel_cluster_indices);
+    free(centroids_sums);
+    free(elements_per_cluster);
     if (early_stopage==1) free(previous_centroids);
 }
 

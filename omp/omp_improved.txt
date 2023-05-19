@@ -1,5 +1,2 @@
-Exec time: 19.1706 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 64 ... Max iter: 64
-Exec time: 5.5923 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 16 ... Max iter: 64
-Exec time: 19.2499 ... Init: 0 ... Fusion: 0 ... Early stop: 0 ... K: 64 ... Max iter: 64
-Exec time: 5.4927 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 16 ... Max iter: 64
-Exec time: 19.1518 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 64 ... Max iter: 64
+Exec time: 9.7916 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 32 ... Max iter: 64
+Exec time: 9.7953 ... Init: 0 ... Fusion: 1 ... Early stop: 0 ... K: 32 ... Max iter: 64
