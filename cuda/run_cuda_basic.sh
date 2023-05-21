@@ -13,7 +13,7 @@ IMAGE="../images/living_room.png"
 MAX_ITERS=100
 
 echo "[Image = $IMAGE] Running test case for different K."
-for K in 8 16 32 64 128
+for K in 8 16 32 64 128 256 512
 do
     echo "K = $K"
     for i in {1..3}
