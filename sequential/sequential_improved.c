@@ -356,6 +356,7 @@ double kmeans_image_compression(unsigned char *imageIn, int width, int height, i
         end_time = omp_get_wtime();
         double psnr = calculatePSNR(original_image, imageIn, width, height, cpp);
         printf("PSNR: %lf\n", psnr);
+        free(original_image);
     }
     free(pixel_cluster_indices);
     free(centroids);
