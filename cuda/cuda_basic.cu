@@ -252,7 +252,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     int shared_memory_size = (K * cpp + K) * sizeof(int);
 
     // Main loop
-    printf("Iteration times: [\n");
+    // printf("Iteration times: [\n");
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
         cudaEventRecord(iteration_start);
         assignPixelsToNearestCentroids<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
@@ -265,11 +265,12 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while updating positions of centroids\n");
         cudaEventRecord(iteration_stop);
+        cudaEventSynchronize(iteration_stop);
         if (iteration > 0) {
             printf(", ");
         }
         float milis = 0.0f;
-        cudaEventElapsedTime(&milis, start, stop);
+        cudaEventElapsedTime(&milis, iteration_start, iteration_stop);
         printf("%f", milis);
     }
     printf("]\n");

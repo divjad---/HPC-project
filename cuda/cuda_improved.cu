@@ -524,11 +524,12 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
             memcpy(previous_centroids, h_centroids, K * cpp * sizeof(float));
         }
         cudaEventRecord(iteration_stop);
+        cudaEventSynchronize(iteration_stop);
         if (iteration > 0) {
             printf(", ");
         }
         float milis = 0.0f;
-        cudaEventElapsedTime(&milis, start, stop);
+        cudaEventElapsedTime(&milis, iteration_start, iteration_stop);
         printf("%f", milis);
     }
 
