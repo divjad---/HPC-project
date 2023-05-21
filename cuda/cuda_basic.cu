@@ -252,7 +252,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     int shared_memory_size = (K * cpp + K) * sizeof(int);
 
     // Main loop
-    // printf("Iteration times: [\n");
+    printf("Iteration times: [");
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
         cudaEventRecord(iteration_start);
         assignPixelsToNearestCentroids<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);

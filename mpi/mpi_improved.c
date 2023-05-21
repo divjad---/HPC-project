@@ -209,6 +209,7 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
         }
     }
     free(elements_per_cluster);
+    free(cluster_values_per_channel);
 }
 
 void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
@@ -373,10 +374,15 @@ int main(int argc, char **argv)
             previous_centroids = (float *)calloc(cpp * K, sizeof(float));
 
         /* Main loop */
+        if (rank == 0)
+        {
+            printf("Iteration times: [");
+        }
         int num_my_pixels = my_image_height * width;
         int *pixel_cluster_indices = (int *)calloc(num_my_pixels, sizeof(int));
         for (int i = 0; i < MAX_ITER; i++)
         {
+            double iteration_start = MPI_Wtime();
             // Check fusion
             if (fusion == 0)
             {
@@ -412,8 +418,21 @@ int main(int argc, char **argv)
                 }
                 memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
             }
-        }
 
+            if (iteration > 0 && rank == 0)
+            {
+                printf(", ");
+            }
+            if (rank == 0)
+            {
+                printf("%lf", MPI_Wtime() - iteration_start);
+            }
+        }
+        if (rank == 0)
+        {
+            printf("]\n");
+        }
+        double end;
         /* Assign pixels to final clusters */
         if (!measure_psnr)
         {
@@ -425,6 +444,7 @@ int main(int argc, char **argv)
                     my_image[i * cpp + channel] = (unsigned char)centroids[cluster * cpp + channel];
                 }
             }
+            end = MPI_Wtime();
         }
         else
         {
@@ -438,6 +458,7 @@ int main(int argc, char **argv)
                     my_image[i * cpp + channel] = (unsigned char)centroids[cluster * cpp + channel];
                 }
             }
+            end = MPI_Wtime();
             double psnr = calculatePSNR(my_original_image, my_image, width, my_image_height, cpp);
             double psnr_joint = 0.0;
             /* Reduce psnr */
@@ -446,12 +467,17 @@ int main(int argc, char **argv)
             {
                 printf("PSNR: %lf\n", psnr_joint);
             }
+            free(my_original_image);
         }
 
         /* Gather the image from all the processes*/
         MPI_Gatherv(my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
         /* Free the resources */
+        free(my_image);
+        free(counts_send);
+        free(displacements);
+
         free(pixel_cluster_indices);
         free(centroids);
         if (early_stoppage == 1)
@@ -459,9 +485,6 @@ int main(int argc, char **argv)
             free(previous_centroids);
         }
     }
-
-    /* End measuring time */
-    double end = MPI_Wtime();
 
     /* Save the compressed image */
     if (rank == 0)

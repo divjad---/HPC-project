@@ -26,10 +26,9 @@ void init_clusters_random(unsigned char *image_in, float *centroids, int width, 
     }
 }
 
-void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
+void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
-    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
 
     // Iterate over each pixel
     for (int i = 0; i < height; i++)
@@ -43,8 +42,6 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
             {
                 cluster_values_per_channel[cluster * cpp + channel] += image_in[index * cpp + channel];
             }
-
-            elements_per_cluster[cluster]++;
         }
     }
 
@@ -56,18 +53,18 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
         {
             if (elements_per_cluster[cluster] > 0)
             {
-                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
+                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel];
             }
             else
             {
-                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel];
+                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel] * elements_per_cluster[cluster];
             }
         }
     }
-    free(elements_per_cluster);
+    free(cluster_values_per_channel);
 }
 
-void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
+void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     for (int i = 0; i < height; i++)
     {
@@ -95,6 +92,7 @@ void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_
                 }
             }
             pixel_cluster_indices[i * width + j] = min_cluster_index;
+            elements_per_cluster[min_cluster_index] += 1;
         }
     }
 }
@@ -192,7 +190,8 @@ int main(int argc, char **argv)
         /* Initialize clusters (same seed -> equal initialization -> no need for broadcast) */
         srand(42);
         float *centroids = (float *)calloc(cpp * K, sizeof(float));
-        if (rank == 0) {
+        if (rank == 0)
+        {
             init_clusters_random(input_image, centroids, width, height, cpp);
         }
         MPI_Bcast(centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
@@ -200,16 +199,21 @@ int main(int argc, char **argv)
         /* Main loop */
         int num_my_pixels = my_image_height * width;
         int *pixel_cluster_indices = (int *)calloc(num_my_pixels, sizeof(int));
+        int *elements_per_cluster = (int *)calloc(cpp * K, sizeof(float));
         for (int i = 0; i < MAX_ITER; i++)
         {
-            assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
-            updateCentroidPositions(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
+            assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
+            updateCentroidPositions(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
 
             MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-            for (int j = 0; j < cpp * K; j++)
+            for (int j = 0; j < K; j++)
             {
-                centroids[j] /= num_processes;
+                for (int k = 0; k < cpp; k++)
+                {
+                    centroids[j * cpp + k] /= (num_processes * elements_per_cluster[j]);
+                }
             }
+            memset(elements_per_cluster, 0, cpp * K * sizeof(float));
         }
 
         /* Assign pixels to final clusters */
@@ -227,6 +231,7 @@ int main(int argc, char **argv)
 
         /* Free the resources */
         free(pixel_cluster_indices);
+        free(elements_per_cluster);
         free(centroids);
     }
 

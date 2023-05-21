@@ -485,7 +485,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         previous_centroids = (float *)calloc(cpp * K, sizeof(float));
 
     // Main loop
-    printf("Iteration times: [\n");
+    printf("Iteration times: [");
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
         cudaEventRecord(iteration_start);
         if (fusion == 0){
@@ -518,7 +518,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
             }
             if (max_change <= EARLY_STOPPAGE_THRESHOLD)
             {
-                printf("EARLY STOPPAGE ");
+                // printf("EARLY STOPPAGE ");
                 break;
             }
             memcpy(previous_centroids, h_centroids, K * cpp * sizeof(float));
@@ -532,7 +532,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         cudaEventElapsedTime(&milis, iteration_start, iteration_stop);
         printf("%f", milis);
     }
-
+    printf("]\n");
     unsigned char *d_compressed_image;
     checkCudaErrors(cudaMalloc(&d_compressed_image, width * height * cpp * sizeof(unsigned char)));
 
