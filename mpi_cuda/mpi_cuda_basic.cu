@@ -281,114 +281,130 @@ int main(int argc, char **argv)
     double start = MPI_Wtime();
 
     /* K-Means Image Compression */
+
+    /* Set random seed*/
+    srand(42);
+
+    /* Split the image */
+    int my_image_height;
+    if (rank == num_processes - 1)
     {
-        /* Set random seed*/
-        srand(42);
-
-        /* Split the image */
-        int my_image_height;
-        if (rank == num_processes - 1)
-        {
-            // If height not divisible by number of processes then last process gets more height then others
-            my_image_height = height / num_processes + height % num_processes;
-        }
-        else
-        {
-            my_image_height = height / num_processes;
-        }
-        unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(int));
-        int *counts_send = (int *)malloc(num_processes * sizeof(int));
-        int *displacements = (int *)malloc(num_processes * sizeof(int));
-        if (rank == 0)
-        {
-            for (int i = 0; i < num_processes; i++)
-            {
-                int process_image_height;
-                if (i == num_processes - 1)
-                {
-                    process_image_height = height / num_processes + height % num_processes;
-                }
-                else
-                {
-                    process_image_height = height / num_processes;
-                }
-                counts_send[i] = process_image_height * width * cpp;
-                if (i == 0)
-                {
-                    displacements[i] = 0;
-                }
-                else
-                {
-                    displacements[i] = displacements[i - 1] + counts_send[i - 1];
-                }
-            }
-        }
-        MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-
-        /* Start the algorithm on GPU */
-        {
-            // Set block size and grid sizes
-            const size_t block_size = BLOCK_SIZE;
-            const size_t grid_size = (my_image_height * width + block_size - 1) / block_size;
-
-            // Initialize clusters
-            float *h_centroids = (float *)calloc(cpp * K, sizeof(float));
-            init_clusters_random(my_image, h_centroids, width, height, cpp);
-
-            // Copy data to the GPU
-            unsigned char *d_my_image;
-            checkCudaErrors(cudaMalloc(&d_my_image, my_image_height * width * cpp * sizeof(unsigned char)));
-            checkCudaErrors(cudaMemcpy(d_my_image, my_image, my_image_height * width * cpp * sizeof(unsigned char), cudaMemcpyHostToDevice));
-
-            float *d_centroids;
-            checkCudaErrors(cudaMalloc(&d_centroids, K * cpp * sizeof(float)));
-            checkCudaErrors(cudaMemcpy(d_centroids, h_centroids, K * cpp * sizeof(float), cudaMemcpyHostToDevice));
-
-            int *d_pixel_cluster_indices;
-            checkCudaErrors(cudaMalloc(&d_pixel_cluster_indices, my_image_height * width * cpp * sizeof(int)));
-
-            int *d_elements_per_cluster;
-            checkCudaErrors(cudaMalloc(&d_elements_per_cluster, K * sizeof(int)));
-
-            // Main loop
-            for (int i = 0; i < MAX_ITER; i++)
-            {
-                assignPixelsToNearestCentroids<<<grid_size, block_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, width, my_image_height, cpp, K);
-                getLastCudaError("Error assigning pixels to centroids!\n");
-                cudaDeviceSynchronize();
-
-                cudaMemset(d_centroids, 0, K * cpp * sizeof(float));
-                cudaMemset(d_elements_per_cluster, 0, K * sizeof(float));
-                int shared_memory_size = (K * cpp + K) * sizeof(float);
-                sumCentroidPositionsSharedMemory<<<grid_size, block_size, shared_memory_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, my_image_height, cpp, K);
-                getLastCudaError("Error summing centroids positions in shared memory!\n");
-                cudaDeviceSynchronize();
-
-                updateCentroidPositions<<<((K * cpp + block_size - 1) / block_size), block_size>>>(d_my_image, d_centroids, d_elements_per_cluster, width, my_image_height, cpp, K);
-                getLastCudaError("Error updating centroid positions!\n");
-
-                // Copy centroids from device -> host
-                checkCudaErrors(cudaMemcpy(h_centroids, d_centroids, K * cpp * sizeof(float), cudaMemcpyDeviceToHost));
-                // Reduce centroids
-                MPI_Allreduce(MPI_IN_PLACE, h_centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-                for (int j = 0; j < cpp * K; j++)
-                {
-                    h_centroids[j] /= num_processes;
-                }
-                // Copy centroids host -> device
-                checkCudaErrors(cudaMemcpy(d_centroids, h_centroids, K * cpp * sizeof(float), cudaMemcpyHostToDevice));
-            }
-
-            // Asign pixels to final clusters
-            mapPixelsToCentroidValues<<<grid_size, block_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, width, my_image_height, cpp, K);
-
-            // Copy image to host
-            checkCudaErrors(cudaMemcpy(my_image, d_my_image, width * my_image_height * cpp * sizeof(unsigned char), cudaMemcpyDeviceToHost));
-        }
-
-        /* Gather the image from all the processes */
-        MPI_Gatherv(my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        // If height not divisible by number of processes then last process gets more height then others
+        my_image_height = height / num_processes + height % num_processes;
     }
+    else
+    {
+        my_image_height = height / num_processes;
+    }
+    unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(unsigned char));
+    int *counts_send = (int *)malloc(num_processes * sizeof(int));
+    int *displacements = (int *)malloc(num_processes * sizeof(int));
+    if (rank == 0)
+    {
+        for (int i = 0; i < num_processes; i++)
+        {
+            int process_image_height;
+            if (i == num_processes - 1)
+            {
+                process_image_height = height / num_processes + height % num_processes;
+            }
+            else
+            {
+                process_image_height = height / num_processes;
+            }
+            counts_send[i] = process_image_height * width * cpp;
+            if (i == 0)
+            {
+                displacements[i] = 0;
+            }
+            else
+            {
+                displacements[i] = displacements[i - 1] + counts_send[i - 1];
+            }
+        }
+    }
+    printf("[Rank: %d] Before MPI_Scatterv!\n", rank);
+    fflush(stdout);
+    MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    printf("[Rank: %d] After MPI_Scatterv!\n", rank);
+    fflush(stdout);
+
+    /* Start the algorithm on GPU */
+
+    // Set block size and grid sizes
+    const size_t block_size = BLOCK_SIZE;
+    const size_t grid_size = (my_image_height * width + block_size - 1) / block_size;
+
+    // Initialize clusters
+    float *h_centroids = (float *)calloc(cpp * K, sizeof(float));
+    if (rank == 0) {
+        printf("Started random initialization!\n");
+        fflush(stdout);
+        init_clusters_random(input_image, h_centroids, width, height, cpp);
+        printf("Finished random initialization!\n");
+        fflush(stdout);
+    }
+    printf("[Rank: %d] Before barrier!\n", rank);
+    fflush(stdout);
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("[Rank: %d] After barrier!\n", rank);
+    fflush(stdout);
+    MPI_Bcast(h_centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    printf("[Rank: %d] After Bcast!\n", rank);
+    fflush(stdout);
+
+    // Copy data to the GPU
+    unsigned char *d_my_image;
+    checkCudaErrors(cudaMalloc(&d_my_image, my_image_height * width * cpp * sizeof(unsigned char)));
+    checkCudaErrors(cudaMemcpy(d_my_image, my_image, my_image_height * width * cpp * sizeof(unsigned char), cudaMemcpyHostToDevice));
+
+    float *d_centroids;
+    checkCudaErrors(cudaMalloc(&d_centroids, K * cpp * sizeof(float)));
+    checkCudaErrors(cudaMemcpy(d_centroids, h_centroids, K * cpp * sizeof(float), cudaMemcpyHostToDevice));
+
+    int *d_pixel_cluster_indices;
+    checkCudaErrors(cudaMalloc(&d_pixel_cluster_indices, my_image_height * width * cpp * sizeof(int)));
+
+    int *d_elements_per_cluster;
+    checkCudaErrors(cudaMalloc(&d_elements_per_cluster, K * sizeof(int)));
+
+    // Main loop
+    for (int i = 0; i < MAX_ITER; i++)
+    {
+        assignPixelsToNearestCentroids<<<grid_size, block_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, width, my_image_height, cpp, K);
+        getLastCudaError("Error assigning pixels to centroids!\n");
+        cudaDeviceSynchronize();
+
+        cudaMemset(d_centroids, 0, K * cpp * sizeof(float));
+        cudaMemset(d_elements_per_cluster, 0, K * sizeof(float));
+        int shared_memory_size = (K * cpp + K) * sizeof(float);
+        sumCentroidPositionsSharedMemory<<<grid_size, block_size, shared_memory_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, d_elements_per_cluster, width, my_image_height, cpp, K);
+        getLastCudaError("Error summing centroids positions in shared memory!\n");
+        cudaDeviceSynchronize();
+
+        updateCentroidPositions<<<((K * cpp + block_size - 1) / block_size), block_size>>>(d_my_image, d_centroids, d_elements_per_cluster, width, my_image_height, cpp, K);
+        getLastCudaError("Error updating centroid positions!\n");
+
+        // Copy centroids from device -> host
+        checkCudaErrors(cudaMemcpy(h_centroids, d_centroids, K * cpp * sizeof(float), cudaMemcpyDeviceToHost));
+        // Reduce centroids
+        MPI_Allreduce(MPI_IN_PLACE, h_centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        for (int j = 0; j < cpp * K; j++)
+        {
+            h_centroids[j] /= num_processes;
+        }
+        // Copy centroids host -> device
+        checkCudaErrors(cudaMemcpy(d_centroids, h_centroids, K * cpp * sizeof(float), cudaMemcpyHostToDevice));
+    }
+
+    // Asign pixels to final clusters
+    mapPixelsToCentroidValues<<<grid_size, block_size>>>(d_my_image, d_pixel_cluster_indices, d_centroids, width, my_image_height, cpp, K);
+
+    // Copy image to host
+    checkCudaErrors(cudaMemcpy(my_image, d_my_image, width * my_image_height * cpp * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+
+    /* Gather the image from all the processes */
+    MPI_Gatherv(my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
     /* End measuring time */
     double end = MPI_Wtime();

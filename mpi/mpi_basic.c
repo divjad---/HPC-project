@@ -157,7 +157,7 @@ int main(int argc, char **argv)
         {
             my_image_height = height / num_processes;
         }
-        unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(int));
+        unsigned char *my_image = (unsigned char *)malloc(my_image_height * width * cpp * sizeof(unsigned char));
         int *counts_send = (int *)malloc(num_processes * sizeof(int));
         int *displacements = (int *)malloc(num_processes * sizeof(int));
         if (rank == 0)
@@ -184,12 +184,18 @@ int main(int argc, char **argv)
                 }
             }
         }
+        printf("[Rank: %d] Before MPI_Scatterv!\n", rank);
+        fflush(stdout);
         MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-
+        printf("[Rank: %d] After MPI_Scatterv!\n", rank);
+        fflush(stdout);
         /* Initialize clusters (same seed -> equal initialization -> no need for broadcast) */
         srand(42);
         float *centroids = (float *)calloc(cpp * K, sizeof(float));
-        init_clusters_random(input_image, centroids, width, height, cpp);
+        if (rank == 0) {
+            init_clusters_random(input_image, centroids, width, height, cpp);
+        }
+        MPI_Bcast(centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
         /* Main loop */
         int num_my_pixels = my_image_height * width;
