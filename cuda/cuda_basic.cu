@@ -43,7 +43,7 @@ __global__ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixe
 
         for (int cluster = 0; cluster < K; cluster++) {
             float curr_distance = 0;
-            
+
             for (int channel = 0; channel < cpp; channel++) {
                 float diff = ((float)imageIn[index + channel] - centroids[cluster * cpp + channel]);
                 curr_distance += diff * diff;
@@ -60,7 +60,7 @@ __global__ void assignPixelsToNearestCentroids(unsigned char *imageIn, int *pixe
 
 // SLOWER than atomics in shared memory
 __global__ void sumCentroidPositions(unsigned char *imageIn, int *pixel_cluster_indices, int *centroids_sums, int* elements_per_clusters, int width, int height, int cpp) {
-    
+
     int tid = blockIdx.x * blockDim.x+ threadIdx.x;
     int i = tid / width;
     int j = tid % width;
@@ -105,8 +105,8 @@ __global__ void sumCentroidPositionsSharedMemory(unsigned char *imageIn, int *pi
         for (int channel = 0; channel < cpp; channel++) {
             atomicAdd(&sdata[cluster * cpp + channel], imageIn[index * cpp + channel]);
         }
-        atomicAdd(&sdata_elements[cluster], 1); 
-    
+        atomicAdd(&sdata_elements[cluster], 1);
+
     }
     __syncthreads();
 
@@ -146,7 +146,7 @@ __global__ void sumCentroidPositionsSharedMemoryWOConstraints(unsigned char *ima
         for (int channel = 0; channel < cpp; channel++) {
             atomicAdd(&sdata[cluster * cpp + channel], imageIn[index * cpp + channel]);
         }
-        atomicAdd(&sdata_elements[cluster], 1); 
+        atomicAdd(&sdata_elements[cluster], 1);
     }
 
     __syncthreads();
@@ -170,7 +170,7 @@ __device__ int getRandomInteger(int lower, int upper, unsigned int seed) {
 }
 
 __global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids, int* centroids_sums, int* elements_per_clusters, int width, int height, int cpp, int K) {
-    
+
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Update each centroid position by calculating the average channel value
@@ -189,12 +189,12 @@ __global__ void updateCentroidPositions(unsigned char *imageIn, float *centroids
 
         centroids_sums[tid] = 0;
         if(channel == 0)
-            elements_per_clusters[cluster] = 0; 
+            elements_per_clusters[cluster] = 0;
     }
 }
 
 __global__ void mapPixelsToCentroidValues(unsigned char *imageIn, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp, int K) {
-    
+
     int tid = blockIdx.x * blockDim.x+ threadIdx.x;
     int i = tid / width;
     int j = tid % width;
@@ -218,6 +218,10 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     cudaEventCreate(&stop);
     cudaEventRecord(start);
 
+    cudaEvent_t iteration_start, iteration_stop;
+    cudaEventCreate(&iteration_start);
+    cudaEventCreate(&iteration_stop);
+
     // Set block and grid sizes
     const size_t blockSize = BLOCK_SIZE;
     const size_t gridSize = (width * height + blockSize - 1) / blockSize;
@@ -225,7 +229,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     // Intialize clusters
     float *h_centroids = (float *) calloc(cpp * K, sizeof(float));
     init_clusters_random(h_image, h_centroids, width, height, cpp);
-    
+
     // Copy data to GPU
     unsigned char *d_image;
     float *d_centroids;
@@ -248,18 +252,27 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     int shared_memory_size = (K * cpp + K) * sizeof(int);
 
     // Main loop
+    printf("Iteration times: [\n");
     for (int iteration = 0; iteration < MAX_ITER; iteration++) {
+        cudaEventRecord(iteration_start);
         assignPixelsToNearestCentroids<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
         getLastCudaError("Error while assigning pixels to nearest centroids\n");
 
-        // sumCentroidPositions<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp);
-        sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
+        sumCentroidPositions<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp);
+        // sumCentroidPositionsSharedMemoryWOConstraints<<<gridSize, blockSize, shared_memory_size>>>(d_image, d_pixel_cluster_indices, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while summation of centroid vales\n");
 
         updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
         getLastCudaError("Error while updating positions of centroids\n");
+        cudaEventRecord(iteration_stop);
+        if (iteration > 0) {
+            printf(", ");
+        }
+        float milis = 0.0f;
+        cudaEventElapsedTime(&milis, start, stop);
+        printf("%f", milis);
     }
-
+    printf("]\n");
     // Assign pixels to final clusters
     mapPixelsToCentroidValues<<<gridSize, blockSize>>>(d_image, d_pixel_cluster_indices, d_centroids, width, height, cpp, K);
 
@@ -271,12 +284,12 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("Execution time: %.4f \n", milliseconds);
-    
-    char output_file[256]; 
+
+    char output_file[256];
     strcpy(output_file, image_file);
     char *extension = strrchr(output_file, '.');
     if (extension != NULL) *extension = '\0';  // Cut off the file extension
-    strcat(output_file, "_compressedGPU.png"); 
+    strcat(output_file, "_compressedGPU.png");
     stbi_write_png(output_file, width, height, cpp, h_image, width * cpp);
 
     cudaFree(d_image);
@@ -300,7 +313,7 @@ int main(int argc, char **argv)
 
     int width, height, cpp;
     unsigned char *h_image = stbi_load(image_file, &width, &height, &cpp, 0);
-    
+
     if(!h_image) return 0;
 
     kmeans_image_compression(h_image, width, height, cpp, image_file);
