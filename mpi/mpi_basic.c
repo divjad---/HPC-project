@@ -182,11 +182,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-        printf("[Rank: %d] Before MPI_Scatterv!\n", rank);
-        fflush(stdout);
         MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-        printf("[Rank: %d] After MPI_Scatterv!\n", rank);
-        fflush(stdout);
         /* Initialize clusters (same seed -> equal initialization -> no need for broadcast) */
         srand(42);
         float *centroids = (float *)calloc(cpp * K, sizeof(float));
@@ -199,18 +195,19 @@ int main(int argc, char **argv)
         /* Main loop */
         int num_my_pixels = my_image_height * width;
         int *pixel_cluster_indices = (int *)calloc(num_my_pixels, sizeof(int));
-        int *elements_per_cluster = (int *)calloc(cpp * K, sizeof(float));
+        int *elements_per_cluster = (int *)calloc(cpp * K, sizeof(int));
         for (int i = 0; i < MAX_ITER; i++)
         {
             assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
             updateCentroidPositions(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
 
             MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(MPI_IN_PLACE, elements_per_cluster, cpp * K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
             for (int j = 0; j < K; j++)
             {
                 for (int k = 0; k < cpp; k++)
                 {
-                    centroids[j * cpp + k] /= (num_processes * elements_per_cluster[j]);
+                    centroids[j * cpp + k] /= elements_per_cluster[j];
                 }
             }
             memset(elements_per_cluster, 0, cpp * K * sizeof(float));
