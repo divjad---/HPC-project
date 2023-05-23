@@ -23,7 +23,8 @@
 int K = 32;
 int MAX_ITER = 20;
 int BLOCK_SIZE = 256;
-#define EARLY_STOPPAGE_THRESHOLD 0.3
+float EARLY_STOPPAGE_THRESHOLD = 1.0;
+
 
 __global__ void calculateMSEKernel(unsigned char *original_image, unsigned char *compressed_image, float *mse, int width, int height, int cpp) {
     int tid = threadIdx.x;
@@ -191,12 +192,12 @@ __global__ void assignPixelsToNearestCentroidsAndSumCentroidPositions(unsigned c
     int j = tid % width;
 
     // Initialize shared memory
-    if (threadIdx.x < K * cpp) {
-        sdata[threadIdx.x] = 0;
+    for (int idx = threadIdx.x; idx < K * cpp; idx += blockDim.x) {
+        sdata[idx] = 0;
     }
 
-    if (threadIdx.x < K) {
-        sdata_elements[threadIdx.x] = 0;
+    for (int idx = threadIdx.x; idx < K; idx += blockDim.x) {
+        sdata_elements[idx] = 0;
     }
     __syncthreads();
 
@@ -501,6 +502,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
         }
 
         updateCentroidPositions<<<((K * cpp + BLOCK_SIZE -1)/BLOCK_SIZE), BLOCK_SIZE>>>(d_image, d_centroids, d_centroids_sums, d_elements_per_cluster, width, height, cpp, K);
+        cudaDeviceSynchronize();
         getLastCudaError("Error while updating positions of centroids\n");
 
         // Check for early stoppage
@@ -518,7 +520,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
             }
             if (max_change <= EARLY_STOPPAGE_THRESHOLD)
             {
-                // printf("EARLY STOPPAGE ");
+                printf("EARLY STOPPAGE %f", max_change);
                 break;
             }
             memcpy(previous_centroids, h_centroids, K * cpp * sizeof(float));
@@ -571,10 +573,26 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
     cudaFree(d_elements_per_cluster);
 }
 
+// Empirically tested for the image of this size (45 MB). We could implement dynamic function to set threshold
+// We set the threshold so strict, so the PSNR(compression quality) with KMEANS++ and Early Stop is always greater than the PSNR of basic algorithm
+float get_early_stoppage_threshold(int K){
+    if (K < 16)
+        return 0.1;
+    if (K < 32)
+        return 0.3;
+    if (K < 48)
+        return 0.7;   
+    if (K < 64)
+        return 1.2;
+    if (K < 128)
+        return 3;
+    return 4.0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2){
-        fprintf(stderr, "Not enough arguments\n");
+        fprintf(stderr, "Not enough arguyments\n");
         exit(1);
     }
     srand(42);
@@ -595,6 +613,8 @@ int main(int argc, char **argv)
         measurePSNR = atoi(argv[6]);
     if (argc > 7) K = atoi(argv[7]);
     if (argc > 8) MAX_ITER = atoi(argv[8]);
+
+    EARLY_STOPPAGE_THRESHOLD = get_early_stoppage_threshold(K);
 
     int width, height, cpp;
     unsigned char *h_image = stbi_load(image_file, &width, &height, &cpp, 0);

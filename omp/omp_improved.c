@@ -18,7 +18,7 @@
 // Default values
 int K = 32;
 int MAX_ITER = 16;
-#define EARLY_STOPPAGE_THRESHOLD 0.3 // TESTED
+float EARLY_STOPPAGE_THRESHOLD = 1.0;
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp)
 {
@@ -334,7 +334,7 @@ double kmeans_image_compression(unsigned char *imageIn, int width, int height, i
             }
             if (max_change <= EARLY_STOPPAGE_THRESHOLD)
             {
-                printf("EARLY STOPPAGE ");
+                printf("EARLY STOPPAGE %f", max_change);
                 break;
             }
             memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
@@ -368,7 +368,7 @@ double kmeans_image_compression(unsigned char *imageIn, int width, int height, i
     else
     { // Measure PSNR
         unsigned char *original_image = (unsigned char *)malloc(num_pixels * cpp * sizeof(unsigned char));
-#pragma omp parallel for schedule(dynamic, 16)
+        #pragma omp parallel for schedule(dynamic, 16)
         for (int h = 0; h < height; h++)
         {
             for (int w = 0; w < width; w++)
@@ -398,6 +398,22 @@ double kmeans_image_compression(unsigned char *imageIn, int width, int height, i
     return end_time;
 }
 
+// Empirically tested for the image of this size (45 MB). We could implement dynamic function to set threshold
+// We set the threshold so strict, so the PSNR(compression quality) with KMEANS++ and Early Stop is always greater than the PSNR of basic algorithm
+float get_early_stoppage_threshold(int K){
+    if (K < 16)
+        return 0.1;
+    if (K < 32)
+        return 0.3;
+    if (K < 48)
+        return 0.7;   
+    if (K < 64)
+        return 1.2;
+    if (K < 128)
+        return 3;
+    return 4.0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -423,6 +439,8 @@ int main(int argc, char **argv)
         K = atoi(argv[6]);
     if (argc > 7)
         MAX_ITER = atoi(argv[7]);
+
+    EARLY_STOPPAGE_THRESHOLD = get_early_stoppage_threshold(K);
 
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);

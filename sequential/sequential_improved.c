@@ -18,7 +18,7 @@
 // Default values
 int K = 32;
 int MAX_ITER = 16;
-#define EARLY_STOPPAGE_THRESHOLD 0.3 // TESTED
+float EARLY_STOPPAGE_THRESHOLD = 1.0;
 
 void init_clusters_random(unsigned char *imageIn, float *centroids, int width, int height, int cpp)
 {
@@ -65,9 +65,10 @@ void init_clusters_kmeans_plus_plus(unsigned char *imageIn, float *centroids, in
     }
 
     float *distances;
+    distances = malloc(num_pixels * sizeof(float));
     for (int k = 1; k < K; k++)
     {
-        distances = malloc(num_pixels * sizeof(float));
+        memset(distances, 0.0f, num_pixels * sizeof(float));
         int farthest_pixel = 0;
         float max_distance = -1;
 
@@ -369,6 +370,22 @@ double kmeans_image_compression(unsigned char *imageIn, int width, int height, i
     return end_time;
 }
 
+// Empirically tested for the image of this size (45 MB). We could implement dynamic function to set threshold
+// We set the threshold so strict, so the PSNR(compression quality) with KMEANS++ and Early Stop is always greater than the PSNR of basic algorithm
+float get_early_stoppage_threshold(int K){
+    if (K < 16)
+        return 0.1;
+    if (K < 32)
+        return 0.3;
+    if (K < 48)
+        return 0.7;   
+    if (K < 64)
+        return 1.2;
+    if (K < 128)
+        return 3;
+    return 4.0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2)
@@ -394,6 +411,8 @@ int main(int argc, char **argv)
         K = atoi(argv[6]);
     if (argc > 7)
         MAX_ITER = atoi(argv[7]);
+
+    EARLY_STOPPAGE_THRESHOLD = get_early_stoppage_threshold(K);
 
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);

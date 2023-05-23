@@ -23,7 +23,7 @@ echo "[Image = $IMAGE] Running test case for different K. [FUSION ONLY]"
 for K in 8 16 32 64 128
 do
     echo "K = $K"
-    for i in {1..3}
+    for i in {1..1}
     do
         echo "Iteration: $i"
         srun omp_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR $K $MAX_ITERS
@@ -35,7 +35,7 @@ for CPUS_PER_TASK in 2 4 8 16 32 64
 do
     echo "CPUS_PER_TASK = $CPUS_PER_TASK"
     export OMP_NUM_THREADS=$CPUS_PER_TASK
-    for i in {1..3}
+    for i in {1..1}
     do
         echo "Iteration: $i"
         srun omp_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR 32 $MAX_ITERS
@@ -50,7 +50,7 @@ echo "[Image = $IMAGE] Running test case for different K. [FUSION ONLY]"
 for K in 8 16 32 64 128
 do
     echo "K = $K"
-    for i in {1..3}
+    for i in {1..1}
     do
         echo "Iteration: $i"
         srun omp_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR $K $MAX_ITERS
@@ -62,7 +62,7 @@ for CPUS_PER_TASK in 2 4 8 16 32 64
 do
     echo "CPUS_PER_TASK = $CPUS_PER_TASK"
     export OMP_NUM_THREADS=$CPUS_PER_TASK
-    for i in {1..3}
+    for i in {1..1}
     do
         echo "Iteration: $i"
         srun omp_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR 32 $MAX_ITERS

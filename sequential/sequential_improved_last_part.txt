@@ -1,0 +1,6 @@
+[Image = ../images/living_room.png] Running test case for different K. [FULL OPTIMIZATION]
+K = 32
+Iteration: 1
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 3132085.0 ON nsc-msv007 CANCELLED AT 2023-05-22T14:21:41 ***
+slurmstepd: error: *** JOB 3132085 ON nsc-msv007 CANCELLED AT 2023-05-22T14:21:41 ***
