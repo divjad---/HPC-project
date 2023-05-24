@@ -1,9 +1,4 @@
 #!/bin/sh
-#SBATCH --job-name=mpi_basic
-#SBATCH --time=10:00:00
-#SBATCH --output=mpi_basic.txt
-#SBATCH --reservation=fri
-
 module load OpenMPI/4.1.0-GCC-10.2.0
 
 mpicc -O2 mpi_improved.c -o mpi_improved -lm
@@ -22,7 +17,7 @@ do
     for i in {1..3}
     do
         echo "Iteration: $i"
-        srun --ntasks=64 mpi_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR $K $MAX_ITERS
+        srun --job-name=mpi_basic --time=10:00:00 --reservation=fri --nodes=2 --ntasks=64 --mpi=pmix mpi_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR $K $MAX_ITERS
     done
 done
 
@@ -33,6 +28,6 @@ do
     for i in {1..3}
     do
         echo "Iteration: $i"
-        srun --ntasks=$N_TASKS omp_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR 32 $MAX_ITERS
+        srun --ntasks=$N_TASKS --mpi=pmix mpi_improved $IMAGE $INIT_STRATEGY $FUSION $EARLY_STOPPAGE $MEASURE_PSNR 32 $MAX_ITERS
     done
 done

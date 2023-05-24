@@ -38,7 +38,7 @@ void init_clusters_kmeans_plus_plus(unsigned char *image_in, float *centroids, i
         centroids[i] = (float)image_in[random_pixel * cpp + i];
     }
 
-    float *distances;
+    float *distances = malloc(num_pixels * sizeof(float));
     for (int k = 1; k < K; k++)
     {
         distances = malloc(num_pixels * sizeof(float));
@@ -168,7 +168,7 @@ void assignPixelsAndUpdateCentroids(unsigned char *image_in, int *pixel_cluster_
     free(cluster_values_per_channel);
 }
 
-void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, int* elements_per_cluster, float *centroids, int width, int height, int cpp)
+void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
 
@@ -184,7 +184,6 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
             {
                 cluster_values_per_channel[cluster * cpp + channel] += image_in[index * cpp + channel];
             }
-
         }
     }
 
@@ -207,7 +206,7 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
     free(cluster_values_per_channel);
 }
 
-void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, int* elements_per_cluster, float *centroids, int width, int height, int cpp)
+void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     for (int i = 0; i < height; i++)
     {
@@ -463,11 +462,12 @@ int main(int argc, char **argv)
             end = MPI_Wtime();
             double psnr = calculatePSNR(my_original_image, my_image, width, my_image_height, cpp);
             double psnr_joint = 0.0;
+
             /* Reduce psnr */
             MPI_Reduce(&psnr, &psnr_joint, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
             if (rank == 0)
             {
-                printf("PSNR: %lf\n", psnr_joint);
+                printf("PSNR: %lf\n", psnr_joint / num_processes);
             }
             free(my_original_image);
         }
