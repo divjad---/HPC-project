@@ -14,6 +14,8 @@ Project for course **High Performance Computing**
 
 5. [MPI + OpenMP implementation](#mpi--openmp-omp)
 
+6. [MPI + CUDA implementation](#mpi--cuda)
+
 ## Sequential
 
 Sequential algorithm is described [here](sequential/README.md).
@@ -33,3 +35,7 @@ MPI implementation is described [here](mpi/README.md).
 ## MPI + OpenMP (OMP)
 
 MPI + OpenMP implementation is described [here](mpi_omp/README.md).
+
+## MPI + CUDA
+
+MPI + CUDA implementation is described [here](mpi_cuda/README.md).
