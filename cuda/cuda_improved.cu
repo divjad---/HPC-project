@@ -520,7 +520,7 @@ void kmeans_image_compression(unsigned char *h_image, int width, int height, int
             }
             if (max_change <= EARLY_STOPPAGE_THRESHOLD)
             {
-                printf("EARLY STOPPAGE %f", max_change);
+                //printf("EARLY STOPPAGE %f", max_change);
                 break;
             }
             memcpy(previous_centroids, h_centroids, K * cpp * sizeof(float));
@@ -581,7 +581,7 @@ float get_early_stoppage_threshold(int K){
     if (K < 32)
         return 0.3;
     if (K < 48)
-        return 0.7;   
+        return 0.7;
     if (K < 64)
         return 1.2;
     if (K < 128)

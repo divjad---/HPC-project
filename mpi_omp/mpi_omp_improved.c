@@ -12,7 +12,7 @@
 /* K-MEANS PARAMETERS */
 int K = 32;
 int MAX_ITER = 20;
-float EARLY_STOPPAGE_THRESHOLD = 0.3f;
+float EARLY_STOPPAGE_THRESHOLD = 1.0;
 
 void init_clusters_random(unsigned char *image_in, float *centroids, int width, int height, int cpp)
 {
@@ -123,12 +123,11 @@ double calculatePSNR(unsigned char *original_image, unsigned char *compressed_im
     return (10 * log10((255.0 * 255.0) / psnr));
 }
 
-void assignPixelsAndUpdateCentroids(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
+void assignPixelsAndUpdateCentroids(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     int num_pixels = width * height;
 
     float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
-    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
 
     // Iterate through each pixel
 #pragma omp parallel for schedule(dynamic, 16) reduction(+ : cluster_values_per_channel[ : K * cpp], elements_per_cluster[ : K])
@@ -177,27 +176,25 @@ void assignPixelsAndUpdateCentroids(unsigned char *image_in, int *pixel_cluster_
         {
             if (elements_per_cluster[cluster] > 0)
             {
-                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
+                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel];
             }
             else
             {
-                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel];
+                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel] * elements_per_cluster[cluster];
             }
         }
     }
 
     // Free the memory
     free(cluster_values_per_channel);
-    free(elements_per_cluster);
 }
 
-void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
+void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
     float *cluster_values_per_channel = (float *)calloc(cpp * K, sizeof(float));
-    int *elements_per_cluster = (int *)calloc(K, sizeof(int));
 
 // Iterate over each pixel
-#pragma omp parallel for schedule(dynamic, 16) reduction(+ : cluster_values_per_channel[ : K * cpp], elements_per_cluster[ : K]) // TODO select group size
+#pragma omp parallel for schedule(dynamic, 16) reduction(+ : cluster_values_per_channel[ : K * cpp]) // TODO select group size
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
@@ -209,8 +206,6 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
             {
                 cluster_values_per_channel[cluster * cpp + channel] += image_in[index * cpp + channel];
             }
-
-            elements_per_cluster[cluster]++;
         }
     }
 
@@ -222,20 +217,20 @@ void updateCentroidPositions(unsigned char *image_in, int *pixel_cluster_indices
         {
             if (elements_per_cluster[cluster] > 0)
             {
-                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel] / elements_per_cluster[cluster];
+                centroids[cluster * cpp + channel] = cluster_values_per_channel[cluster * cpp + channel];
             }
             else
             {
-                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel];
+                centroids[cluster * cpp + channel] = image_in[random_pixel_i * cpp + channel] * elements_per_cluster[cluster];
             }
         }
     }
-    free(elements_per_cluster);
+    free(cluster_values_per_channel);
 }
 
-void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, float *centroids, int width, int height, int cpp)
+void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_indices, int *elements_per_cluster, float *centroids, int width, int height, int cpp)
 {
-#pragma omp parallel for schedule(dynamic, 16)
+#pragma omp parallel for schedule(dynamic, 16) reduction(+ : elements_per_cluster[ : K])
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
@@ -262,8 +257,26 @@ void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_
                 }
             }
             pixel_cluster_indices[i * width + j] = min_cluster_index;
+            elements_per_cluster[min_cluster_index] += 1;
         }
     }
+}
+
+// Empirically tested for the image of this size (45 MB). We could implement dynamic function to set threshold
+// We set the threshold so strict, so the PSNR(compression quality) with KMEANS++ and Early Stop is always greater than the PSNR of basic algorithm
+float get_early_stoppage_threshold(int K)
+{
+    if (K < 16)
+        return 0.1;
+    if (K < 32)
+        return 0.3;
+    if (K < 48)
+        return 0.7;
+    if (K < 64)
+        return 1.2;
+    if (K < 128)
+        return 3;
+    return 4.0;
 }
 
 int main(int argc, char **argv)
@@ -326,12 +339,15 @@ int main(int argc, char **argv)
     if (argc > 7)
         MAX_ITER = atoi(argv[7]);
 
+    EARLY_STOPPAGE_THRESHOLD = get_early_stoppage_threshold(K);
+
     /* Read the image */
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);
 
     /* Begin measuring time */
     double start = MPI_Wtime();
+    double end;
 
     /* K-Means Image Compression*/
     {
@@ -378,44 +394,56 @@ int main(int argc, char **argv)
         /* Initialize clusters (same seed -> equal initialization -> no need for broadcast) */
         srand(42);
         float *centroids = (float *)calloc(cpp * K, sizeof(float));
-        if (rank == 0)
+        if (init_strategy == 0)
         {
-            if (init_strategy == 0)
-            {
-                init_clusters_random(input_image, centroids, width, height, cpp);
-            }
-            else
-            {
-                init_clusters_kmeans_plus_plus(input_image, centroids, width, height, cpp);
-            }
+            init_clusters_random(my_image, centroids, width, my_image_height, cpp);
         }
-        MPI_Bcast(centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        else
+        {
+            init_clusters_kmeans_plus_plus(my_image, centroids, width, my_image_height, cpp);
+        }
+        MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        for (int i = 0; i < cpp * K; i++)
+        {
+            centroids[i] /= num_processes;
+        }
 
         float *previous_centroids;
         if (early_stoppage == 1)
             previous_centroids = (float *)calloc(cpp * K, sizeof(float));
 
         /* Main loop */
+        if (rank == 0)
+        {
+            printf("Iteration times: [");
+        }
         int num_my_pixels = my_image_height * width;
         int *pixel_cluster_indices = (int *)calloc(num_my_pixels, sizeof(int));
+        int *elements_per_cluster = (int *)calloc(cpp * K, sizeof(int));
         for (int i = 0; i < MAX_ITER; i++)
         {
+            double iteration_start = MPI_Wtime();
             // Check fusion
             if (fusion == 0)
             {
-                assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
-                updateCentroidPositions(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
+                assignPixelsToNearestCentroids(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
+                updateCentroidPositions(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
             }
             else
             {
-                assignPixelsAndUpdateCentroids(my_image, pixel_cluster_indices, centroids, width, my_image_height, cpp);
+                assignPixelsAndUpdateCentroids(my_image, pixel_cluster_indices, elements_per_cluster, centroids, width, my_image_height, cpp);
             }
 
             MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
-            for (int j = 0; j < cpp * K; j++)
+            MPI_Allreduce(MPI_IN_PLACE, elements_per_cluster, cpp * K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+            for (int j = 0; j < K; j++)
             {
-                centroids[j] /= num_processes;
+                for (int k = 0; k < cpp; k++)
+                {
+                    centroids[j * cpp + k] /= elements_per_cluster[j];
+                }
             }
+            memset(elements_per_cluster, 0, cpp * K * sizeof(float));
 
             // Check for early stoppage
             if (early_stoppage == 1)
@@ -435,8 +463,19 @@ int main(int argc, char **argv)
                 }
                 memcpy(previous_centroids, centroids, K * cpp * sizeof(float));
             }
+            if (i > 0 && rank == 0)
+            {
+                printf(", ");
+            }
+            if (rank == 0)
+            {
+                printf("%lf", MPI_Wtime() - iteration_start);
+            }
         }
-
+        if (rank == 0)
+        {
+            printf("]\n");
+        }
         /* Assign pixels to final clusters */
         if (!measure_psnr)
         {
@@ -448,6 +487,7 @@ int main(int argc, char **argv)
                     my_image[i * cpp + channel] = (unsigned char)centroids[cluster * cpp + channel];
                 }
             }
+            end = MPI_Wtime();
         }
         else
         {
@@ -462,6 +502,7 @@ int main(int argc, char **argv)
                     my_image[i * cpp + channel] = (unsigned char)centroids[cluster * cpp + channel];
                 }
             }
+            end = MPI_Wtime();
             double psnr = calculatePSNR(my_original_image, my_image, width, my_image_height, cpp);
             double psnr_joint = 0.0;
             /* Reduce psnr */
@@ -470,22 +511,25 @@ int main(int argc, char **argv)
             {
                 printf("PSNR: %lf\n", psnr_joint);
             }
+            free(my_original_image);
         }
 
         /* Gather the image from all the processes*/
         MPI_Gatherv(my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
         /* Free the resources */
+        free(my_image);
+        free(counts_send);
+        free(displacements);
+
         free(pixel_cluster_indices);
+        free(elements_per_cluster);
         free(centroids);
         if (early_stoppage == 1)
         {
             free(previous_centroids);
         }
     }
-
-    /* End measuring time */
-    double end = MPI_Wtime();
 
     /* Save the compressed image */
     if (rank == 0)
@@ -500,7 +544,7 @@ int main(int argc, char **argv)
         {
             *extension = '\0';
         }
-        strcat(output_file, "_compressed_mpi_improved.png");
+        strcat(output_file, "_compressed_mpi_omp_improved.png");
 
         stbi_write_png(output_file, width, height, cpp, input_image, width * cpp);
     }

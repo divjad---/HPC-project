@@ -1,14 +1,14 @@
 #!/bin/sh
-#SBATCH --job-name=omp_basic
+#SBATCH --job-name=omp_single
 #SBATCH --time=10:00:00
-#SBATCH --output=omp_basic.txt
+#SBATCH --output=omp_single.txt
 #SBATCH --reservation=fri
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 
 export OMP_PLACES=cores
 export OMP_PROC_BIND=TRUE
-export OMP_NUM_THREADS=2
+export OMP_NUM_THREADS=1
 
 gcc -O2 omp_improved.c --openmp -lm -o omp_improved
 

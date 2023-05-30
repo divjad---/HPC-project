@@ -12,7 +12,7 @@
 /* K-MEANS PARAMETERS */
 int K = 32;
 int MAX_ITER = 20;
-float EARLY_STOPPAGE_THRESHOLD = 0.3f;
+float EARLY_STOPPAGE_THRESHOLD = 1.0;
 
 void init_clusters_random(unsigned char *image_in, float *centroids, int width, int height, int cpp)
 {
@@ -41,7 +41,7 @@ void init_clusters_kmeans_plus_plus(unsigned char *image_in, float *centroids, i
     float *distances = malloc(num_pixels * sizeof(float));
     for (int k = 1; k < K; k++)
     {
-        distances = malloc(num_pixels * sizeof(float));
+        distances = memset(distances, 0, num_pixels * sizeof(float));
         int farthest_pixel = 0;
         float max_distance = -1.0f;
 
@@ -239,6 +239,23 @@ void assignPixelsToNearestCentroids(unsigned char *image_in, int *pixel_cluster_
     }
 }
 
+// Empirically tested for the image of this size (45 MB). We could implement dynamic function to set threshold
+// We set the threshold so strict, so the PSNR(compression quality) with KMEANS++ and Early Stop is always greater than the PSNR of basic algorithm
+float get_early_stoppage_threshold(int K)
+{
+    if (K < 16)
+        return 0.1;
+    if (K < 32)
+        return 0.3;
+    if (K < 48)
+        return 0.7;
+    if (K < 64)
+        return 1.2;
+    if (K < 128)
+        return 3;
+    return 4.0;
+}
+
 int main(int argc, char **argv)
 {
     /* Initialize MPI */
@@ -299,6 +316,8 @@ int main(int argc, char **argv)
     if (argc > 7)
         MAX_ITER = atoi(argv[7]);
 
+    EARLY_STOPPAGE_THRESHOLD = get_early_stoppage_threshold(K);
+
     /* Read the image */
     int width, height, cpp;
     unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);
@@ -352,18 +371,19 @@ int main(int argc, char **argv)
         /* Initialize clusters (same seed -> equal initialization -> no need for broadcast) */
         srand(42);
         float *centroids = (float *)calloc(cpp * K, sizeof(float));
-        if (rank == 0)
+        if (init_strategy == 0)
         {
-            if (init_strategy == 0)
-            {
-                init_clusters_random(input_image, centroids, width, height, cpp);
-            }
-            else
-            {
-                init_clusters_kmeans_plus_plus(input_image, centroids, width, height, cpp);
-            }
+            init_clusters_random(my_image, centroids, width, my_image_height, cpp);
         }
-        MPI_Bcast(centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        else
+        {
+            init_clusters_kmeans_plus_plus(my_image, centroids, width, my_image_height, cpp);
+        }
+        MPI_Allreduce(MPI_IN_PLACE, centroids, cpp * K, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+        for (int i = 0; i < cpp * K; i++)
+        {
+            centroids[i] /= num_processes;
+        }
 
         float *previous_centroids;
         if (early_stoppage == 1)
