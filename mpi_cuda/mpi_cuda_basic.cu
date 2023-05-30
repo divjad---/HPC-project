@@ -268,11 +268,7 @@ int main(int argc, char **argv)
 
     /* Read the image */
     int width, height, cpp;
-    unsigned char *input_image;
-    if (rank == 0)
-    {
-        input_image = stbi_load(image_file, &width, &height, &cpp, 0);
-    }
+    unsigned char *input_image = stbi_load(image_file, &width, &height, &cpp, 0);
 
     /* Synchronize the processes */
     MPI_Barrier(MPI_COMM_WORLD);
@@ -323,11 +319,7 @@ int main(int argc, char **argv)
             }
         }
     }
-    printf("[Rank: %d] Before MPI_Scatterv!\n", rank);
-    fflush(stdout);
     MPI_Scatterv(input_image, counts_send, displacements, MPI_UNSIGNED_CHAR, my_image, my_image_height * width * cpp, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-    printf("[Rank: %d] After MPI_Scatterv!\n", rank);
-    fflush(stdout);
 
     /* Start the algorithm on GPU */
 
@@ -338,20 +330,9 @@ int main(int argc, char **argv)
     // Initialize clusters
     float *h_centroids = (float *)calloc(cpp * K, sizeof(float));
     if (rank == 0) {
-        printf("Started random initialization!\n");
-        fflush(stdout);
         init_clusters_random(input_image, h_centroids, width, height, cpp);
-        printf("Finished random initialization!\n");
-        fflush(stdout);
     }
-    printf("[Rank: %d] Before barrier!\n", rank);
-    fflush(stdout);
-    MPI_Barrier(MPI_COMM_WORLD);
-    printf("[Rank: %d] After barrier!\n", rank);
-    fflush(stdout);
     MPI_Bcast(h_centroids, cpp * K, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    printf("[Rank: %d] After Bcast!\n", rank);
-    fflush(stdout);
 
     // Copy data to the GPU
     unsigned char *d_my_image;
@@ -432,6 +413,7 @@ int main(int argc, char **argv)
         stbi_image_free(input_image);
 
     /* Finalize MPI */
+    MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
 
     return 0;
