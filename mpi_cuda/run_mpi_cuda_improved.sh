@@ -8,9 +8,9 @@ export UCX_HANDLE_ERRORS=none
 srun --reservation=fri-vr --partition=gpu nvcc -O2 -I/d/hpc/software/openmpi-4.1.3/build/include -L/d/hpc/software/openmpi-4.1.3/build/lib/ -lmpi -lm mpi_cuda_improved.cu -o mpi_cuda_improved
 
 IMAGE="../images/living_room.png"
-INIT_STRATEGY=0
-FUSION=0
-EARLY_STOPPAGE=0
+INIT_STRATEGY=1
+FUSION=1
+EARLY_STOPPAGE=1
 MEASURE_PSNR=0
 MAX_ITERS=100
 

@@ -408,9 +408,7 @@ int main(int argc, char **argv)
         stbi_write_png(output_file, width, height, cpp, input_image, width * cpp);
     }
 
-    /* Free the image */
-    if (rank == 0)
-        stbi_image_free(input_image);
+    stbi_image_free(input_image);
 
     /* Finalize MPI */
     MPI_Barrier(MPI_COMM_WORLD);
